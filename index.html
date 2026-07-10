@@ -139,6 +139,14 @@
   <section id="v-log" class="view"><div class="card"><h2>📝 操作ログ（全体）</h2><button class="btn ghost sm" onclick="loadLogs()">更新</button><div id="logBody" style="margin-top:10px"></div></div></section>
 
   <section id="v-settings" class="view">
+    <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
+      <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
+      <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
+      <label>合言葉（SECRET）</label><input id="cloudSecretInput" placeholder="Code.gsのSECRETと同じ">
+      <div style="margin-top:8px"><button class="btn sm" onclick="saveCloudSettings()">接続して保存</button> <button class="btn ghost sm" onclick="testCloud()">接続テスト</button> <span id="cloudStatus" class="muted"></span></div></div>
+    <div class="card"><h2>💬 LINE送信</h2>
+      <p class="muted">オンにすると出荷時に公式LINEへ自動送信（画像も）。要：Code.gsにLINEチャネル設定。オフなら送信画面を開く方式。</p>
+      <label class="switch"><input type="checkbox" id="lineDirectChk" onchange="saveLineSetting()"> 直接送信（画像も送る）を使う</label></div>
     <div class="card"><h2>バックアップ / 取り込み</h2>
       <button class="btn sm" onclick="doExport()">⬇ JSONエクスポート</button>
       <button class="btn ghost sm" onclick="document.getElementById('importFile').click()">⬆ JSONインポート</button>
@@ -590,16 +598,15 @@ async function doCsvImport(inp){var f=inp.files[0];if(!f)return;if(!confirm('CSV
   await sb.rpc('sync_counters');inp.value='';loadAll();toast(n+'件を取り込みました');}
 
 /* ============ ローカルファースト データ層（デオドラント方式） ============ */
-/* ↓↓↓ ここに自分のApps ScriptウェブアプリURLと合言葉を入れると複数端末で同期。空なら端末内のみ ↓↓↓ */
-var CLOUD_URL = '';            /* 例: https://script.google.com/macros/s/xxxx/exec */
-var CLOUD_SECRET = 'changeme'; /* Code.gs の SECRET と同じ文字列に */
-/* ↑↑↑ ここだけ書き換え ↑↑↑ */
-
+var CLOUD_URL = '';            /* 使わなくてOK（アプリの設定画面から入力できます） */
+var CLOUD_SECRET = 'changeme';
 var KEY='gakki_state_v1';
 var CONDITIONS=['新品、未使用','未使用に近い','目立った傷や汚れなし','やや傷や汚れあり','傷や汚れあり','全体的に状態が悪い'];
 var state=null,_pushTimer=null,_pollStarted=false;
+function CU(){return (state&&state.cloudUrl)||CLOUD_URL||'';}
+function CS(){return (state&&state.cloudSecret)||CLOUD_SECRET||'changeme';}
 
-function defaultState(){return {rev:0,logSeq:0,counters:{},items:[],logs:[],settings:{
+function defaultState(){return {rev:0,logSeq:0,counters:{},items:[],logs:[],cloudUrl:'',cloudSecret:'',lineDirect:false,settings:{
   categories:[{name:'エフェクター',prefix:'E'},{name:'ギター',prefix:'G'},{name:'ベース',prefix:'B'}],
   subcategories:[{parent:'エフェクター',name:'歪み系'},{parent:'エフェクター',name:'空間系'},{parent:'エフェクター',name:'その他'},{parent:'ギター',name:'エレキギター'},{parent:'ベース',name:'エレキベース'}],
   categoryFields:[{category:'エフェクター',label:'箱の有無',options:'箱あり,箱無し'},{category:'エフェクター',label:'アダプター',options:'有,無'},{category:'ギター',label:'ケースの有無',options:'純正ケース有,ケース有,本体のみ'},{category:'ベース',label:'ケースの有無',options:'純正ケース有,ケース有,本体のみ'}],
@@ -611,8 +618,7 @@ function defaultState(){return {rev:0,logSeq:0,counters:{},items:[],logs:[],sett
   opConditions:['完動品','要：整備'],
   periodColors:[{min:0,max:30,color:'赤'},{min:31,max:60,color:'橙'},{min:61,max:90,color:'黄'},{min:91,max:3650,color:'グレー'}]
 }};}
-function normalize(o){var d=defaultState();o=o||{};o.settings=Object.assign({},d.settings,o.settings||{});['items','logs'].forEach(function(k){if(!Array.isArray(o[k]))o[k]=d[k];});o.counters=o.counters||{};o.logSeq=o.logSeq||0;o.rev=o.rev||0;
-  Object.keys(d.settings).forEach(function(k){if(!Array.isArray(o.settings[k]))o.settings[k]=d.settings[k];});return o;}
+function normalize(o){var d=defaultState();o=o||{};o.settings=Object.assign({},d.settings,o.settings||{});['items','logs'].forEach(function(k){if(!Array.isArray(o[k]))o[k]=d[k];});o.counters=o.counters||{};o.logSeq=o.logSeq||0;o.rev=o.rev||0;o.cloudUrl=o.cloudUrl||'';o.cloudSecret=o.cloudSecret||'';o.lineDirect=!!o.lineDirect;Object.keys(d.settings).forEach(function(k){if(!Array.isArray(o.settings[k]))o.settings[k]=d.settings[k];});return o;}
 function loadState(){try{var s=JSON.parse(localStorage.getItem(KEY));if(s)return normalize(s);}catch(e){}return defaultState();}
 function save(){localStorage.setItem(KEY,JSON.stringify(state));schedulePush();}
 function nowStr(){var d=new Date(),p=function(n){return ('0'+n).slice(-2);};return p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());}
@@ -630,26 +636,34 @@ function logAction(type,itemId,name,detail,revert){state.logs.push({id:++state.l
 function applyRevert(it,rev){Object.keys(rev).forEach(function(k){it[k]=rev[k];});}
 function resizeImage(file,max,q){return new Promise(function(res){var rd=new FileReader();rd.onload=function(){var img=new Image();img.onload=function(){var w=img.width,h=img.height;if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}var cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0,w,h);res(cv.toDataURL('image/jpeg',q));};img.onerror=function(){res(rd.result);};img.src=rd.result;};rd.readAsDataURL(file);});}
 
-/* ---- 同期（裏側・UIをブロックしない） ---- */
-function schedulePush(){if(!CLOUD_URL)return;if(_pushTimer)clearTimeout(_pushTimer);_pushTimer=setTimeout(pushCloud,1200);}
-function pushCloud(){if(!CLOUD_URL)return;state.rev=Date.now();var body='action=save&secret='+encodeURIComponent(CLOUD_SECRET)+'&rev='+state.rev+'&data='+encodeURIComponent(JSON.stringify(state));try{fetch(CLOUD_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body});setSync('☁ 保存済 '+new Date().toLocaleTimeString('ja-JP'));}catch(e){setSync('⚠ 同期失敗');}}
-function pullCloud(force){if(!CLOUD_URL)return;var cb='__cb'+Date.now()+Math.floor(Math.random()*1000),s=document.createElement('script');
-  var timer=setTimeout(function(){cleanup();},15000);function cleanup(){clearTimeout(timer);try{delete window[cb];}catch(e){window[cb]=undefined;}if(s.parentNode)s.parentNode.removeChild(s);}
-  window[cb]=function(resp){cleanup();try{if(resp&&resp.data){var remote=JSON.parse(resp.data);var rrev=Number(resp.rev||remote.rev||0);if(force||rrev>(state.rev||0)){state=normalize(remote);state.rev=rrev;localStorage.setItem(KEY,JSON.stringify(state));rebuildAll();setSync('☁ 最新取得 '+new Date().toLocaleTimeString('ja-JP'));}}else{pushCloud();}}catch(e){}};
-  s.onerror=function(){cleanup();setSync('⚠ 取得失敗');};
-  s.src=CLOUD_URL+(CLOUD_URL.indexOf('?')>=0?'&':'?')+'callback='+cb+'&action=load&secret='+encodeURIComponent(CLOUD_SECRET)+'&t='+Date.now();
+/* ---- 同期（裏側） ---- */
+function schedulePush(){if(!CU())return;if(_pushTimer)clearTimeout(_pushTimer);_pushTimer=setTimeout(pushCloud,1200);}
+function pushCloud(){if(!CU())return;state.rev=Date.now();var body='action=save&secret='+encodeURIComponent(CS())+'&rev='+state.rev+'&data='+encodeURIComponent(JSON.stringify(state));try{fetch(CU(),{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body});setSync('☁ 保存済 '+new Date().toLocaleTimeString('ja-JP'));}catch(e){setSync('⚠ 同期失敗');}}
+function pullCloud(force){if(!CU())return;var cb='__cb'+Date.now()+Math.floor(Math.random()*1000),s=document.createElement('script');
+  var timer=setTimeout(function(){cleanup();var st=document.getElementById('cloudStatus');if(st)st.textContent='⚠ 応答なし（URL/デプロイ設定=全員 を確認）';},15000);
+  function cleanup(){clearTimeout(timer);try{delete window[cb];}catch(e){window[cb]=undefined;}if(s.parentNode)s.parentNode.removeChild(s);}
+  window[cb]=function(resp){cleanup();var st=document.getElementById('cloudStatus');try{if(resp&&resp.error){if(st)st.textContent='⚠ 合言葉が違います';return;}if(resp&&resp.data){var remote=JSON.parse(resp.data);var rrev=Number(resp.rev||remote.rev||0);if(force||rrev>(state.rev||0)){var keep={cloudUrl:state.cloudUrl,cloudSecret:state.cloudSecret,lineDirect:state.lineDirect};state=normalize(remote);state.rev=rrev;Object.assign(state,keep);localStorage.setItem(KEY,JSON.stringify(state));rebuildAll();setSync('☁ 最新取得 '+new Date().toLocaleTimeString('ja-JP'));if(st)st.textContent='✅ 接続OK（同期中）';}else if(st){st.textContent='✅ 接続OK（既に最新）';}}else{pushCloud();if(st)st.textContent='✅ 接続OK（この端末のデータで開始）';}}catch(e){if(st)st.textContent='⚠ 解析エラー';}};
+  s.onerror=function(){cleanup();var st=document.getElementById('cloudStatus');if(st)st.textContent='⚠ 取得失敗（URL/デプロイ設定を確認）';setSync('⚠ 取得失敗');};
+  s.src=CU()+(CU().indexOf('?')>=0?'&':'?')+'callback='+cb+'&action=load&secret='+encodeURIComponent(CS())+'&t='+Date.now();
   document.body.appendChild(s);}
-function startPoll(){if(_pollStarted)return;_pollStarted=true;setInterval(function(){if(CLOUD_URL)pullCloud(false);},15000);}
+function startPoll(){if(_pollStarted)return;_pollStarted=true;setInterval(function(){if(CU())pullCloud(false);},15000);}
 
-function initApp(){document.getElementById('app').style.display='block';state=loadState();rebuildAll();initBuy();
-  if(CLOUD_URL){setSync('接続中…');pullCloud(true);startPoll();}else{setSync('端末内保存（同期オフ）');}}
+/* ---- クラウド設定UI ---- */
+function fillCloudUI(){var u=document.getElementById('cloudUrlInput'),s=document.getElementById('cloudSecretInput'),l=document.getElementById('lineDirectChk');if(u)u.value=state.cloudUrl||'';if(s)s.value=state.cloudSecret||'';if(l)l.checked=!!state.lineDirect;}
+function saveCloudSettings(){state.cloudUrl=document.getElementById('cloudUrlInput').value.trim();state.cloudSecret=document.getElementById('cloudSecretInput').value.trim();localStorage.setItem(KEY,JSON.stringify(state));var st=document.getElementById('cloudStatus');if(CU()){if(st)st.textContent='接続中…';pullCloud(true);startPoll();}else{if(st)st.textContent='端末内のみ（同期オフ）';setSync('端末内保存（同期オフ）');}}
+function testCloud(){var st=document.getElementById('cloudStatus');state.cloudUrl=document.getElementById('cloudUrlInput').value.trim();state.cloudSecret=document.getElementById('cloudSecretInput').value.trim();if(!CU()){if(st)st.textContent='URLを入力してください';return;}if(st)st.textContent='テスト中…';pullCloud(true);}
+function saveLineSetting(){state.lineDirect=document.getElementById('lineDirectChk').checked;save();}
+
+function initApp(){document.getElementById('app').style.display='block';state=loadState();rebuildAll();initBuy();fillCloudUI();
+  if(CU()){setSync('接続中…');pullCloud(true);startPoll();}else{setSync('端末内保存（同期オフ）');}}
 
 /* ---- 上書き：データ操作をローカル化 ---- */
-function loadAll(){if(CLOUD_URL)pullCloud(true);else rebuildAll();}
+function loadAll(){if(CU())pullCloud(true);else rebuildAll();}
 function reloadData(){loadAll();}
 function doLogin(){}
 function doLogout(){toast('データはこの端末＋（設定時）クラウドに保存されています');}
 function lineUrl(msg,photo){var t=msg+(photo?('\n写真: '+photo):'');return 'https://line.me/R/msg/text/?'+encodeURIComponent(t);}
+async function sendLineDirect(text,photo){var url=CU();if(!url)return {ok:false,msg:'クラウド未設定'};try{var res=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'line',secret:CS(),text:text,image:photo||''})});var j=await res.json();return {ok:!j.error,msg:JSON.stringify(j)};}catch(e){return {ok:false,msg:String(e.message||e)};}}
 
 function submitPurchase(){
   var rows=document.querySelectorAll('#buyRows .purchase-row'),items=[];
@@ -675,17 +689,28 @@ function saveItem(id){
 
 function pickPhoto(id){photoTargetId=id;document.getElementById('photoPicker').click();}
 async function doPhotoUpload(id,file){toast('写真を処理中…');var dataUrl=await resizeImage(file,1000,0.82);var it=state.items.filter(function(x){return x.id===id;})[0];if(!it)return;
-  if(CLOUD_URL){try{var res=await fetch(CLOUD_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'photo',secret:CLOUD_SECRET,name:id,data:dataUrl})});var j=await res.json();it.photo=(j&&j.url)?j.url:dataUrl;}catch(e){it.photo=dataUrl;}}else{it.photo=dataUrl;}
+  if(CU()){try{var res=await fetch(CU(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'photo',secret:CS(),name:id,data:dataUrl})});var j=await res.json();it.photo=(j&&j.url)?j.url:dataUrl;}catch(e){it.photo=dataUrl;}}else{it.photo=dataUrl;}
   save();var ph=document.querySelector('#it-'+id+' .ph');if(ph){if(document.getElementById('showImg').checked){ph.style.backgroundImage='url('+it.photo+')';ph.innerHTML='';}else ph.innerHTML='写真あり<span>📷変更</span>';}toast('写真を登録しました');}
 
 function doShip(){var x=SEL.ship;if(!x)return;var ch=document.getElementById('shipChannel').value,pat=document.getElementById('shipPattern').value,price=Number(document.getElementById('shipPrice').value)||0;
   if(!pat){toast('送料パターンを選んでください');return;}if(!price){toast('販売価格を入力してください');return;}
   var method=patternMethod(pat),ship=patternFee(pat),profit=calcProfit(price,x.cost,feeOf(ch),ship),today=todayStr();
   var msg='【出荷依頼】\n商品ID：'+x.id+'\nメーカー：'+x.maker+'\n商品名：'+x.name+'\n発送方法：'+method+'\n依頼日：'+today;
-  window.open(lineUrl(msg,x.photo),'_blank');
   x.status='売却済み';x.shipPattern=pat;x.channel=ch;x.salePrice=price;x.profit=profit;x.shipDate=today;x.saleDate=today;computeProfits(x);
   logAction('出荷',x.id,x.name,ch+' '+price+'円 / 利益 '+profit+'円 / '+method+'('+pat+')',null);save();
-  document.getElementById('shipOut').innerHTML='<div class="hr"></div><div class="msgbox"><b>在庫から差引しました（発送方法：'+esc(method)+' / 利益 '+yen(profit)+'円）</b>\nLINEの送信画面が開いています。宛先を選んで送信してください。</div>'+(x.photo?'<p class="muted" style="margin-top:8px">商品写真（保存して添付）：</p><img src="'+esc(x.photo)+'" style="max-width:220px;border-radius:8px">':'')+'<div class="hr"></div><a class="btn sm" style="text-decoration:none;display:inline-block" target="_blank" href="'+lineUrl(msg,x.photo)+'">もう一度LINEを開く ↗</a>';
+  var link=lineUrl(msg,x.photo);
+  var out='<div class="hr"></div><div class="msgbox"><b>在庫から差引しました（発送方法：'+esc(method)+' / 利益 '+yen(profit)+'円）</b></div>';
+  if(state.lineDirect && CU()){
+    out+='<div class="muted" id="lineSendStat" style="margin-top:8px">公式LINEへ送信中…</div>';
+    document.getElementById('shipOut').innerHTML=out+(x.photo?'<img src="'+esc(x.photo)+'" style="max-width:220px;border-radius:8px;margin-top:6px">':'');
+    sendLineDirect(msg,x.photo).then(function(r){var el=document.getElementById('lineSendStat');if(el)el.innerHTML=r.ok?'✅ 公式LINEに送信しました（画像含む）':'⚠ 送信失敗: '+esc(r.msg)+'<br><a class="btn sm" target="_blank" href="'+link+'">手動でLINEを開く ↗</a>';});
+  } else {
+    try{window.open(link,'_blank');}catch(e){}
+    out+='<p style="margin-top:8px"><a class="btn accent" style="text-decoration:none;display:inline-block;font-size:16px;padding:12px 20px" target="_blank" href="'+link+'">📩 LINEを開いて送信</a></p>';
+    out+='<p class="muted">↑が開かない場合はこのボタンをタップ。'+(x.photo?'写真は下の画像を長押し保存して添付してください。':'')+'</p>';
+    out+=(x.photo?'<img src="'+esc(x.photo)+'" style="max-width:220px;border-radius:8px">':'');
+    document.getElementById('shipOut').innerHTML=out;
+  }
   document.getElementById('shipGo').textContent='完了（差引済み）';renderManage();renderShipList();renderDash(dashFromStock());refreshOpenLogs();toast('在庫から差し引きました');}
 
 function mapLog(g){return {logId:g.id,date:g.at,type:g.type,id:g.item_id,name:g.name,detail:g.detail,state:g.state};}
@@ -717,11 +742,14 @@ function saveSet(table){
 function reloadCfgOnly(){CFG=buildCFG();STOCK.forEach(computeProfits);fillSelectors();renderSettings();renderManage();renderShipList();renderDash(dashFromStock());}
 
 function doExport(){var blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='楽器在庫_backup_'+todayStr().replace(/\//g,'')+'.json';document.body.appendChild(a);a.click();setTimeout(function(){a.remove();},1000);toast('エクスポートしました');}
-function doImport(inp){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(){var data;try{data=JSON.parse(r.result);}catch(e){toast('JSON読込失敗');return;}if(!confirm('現在のデータを上書きします。よろしいですか？')){inp.value='';return;}state=normalize(data);localStorage.setItem(KEY,JSON.stringify(state));rebuildAll();renderDash(dashFromStock());if(CLOUD_URL)pushCloud();toast('インポートしました');};r.readAsText(f);inp.value='';}
-function doCsvImport(inp){var f=inp.files[0];if(!f)return;if(!confirm('CSVを在庫に追加します。よろしいですか？')){inp.value='';return;}var r=new FileReader();r.onload=function(){var rows=parseCsv(r.result);if(rows.length<2){toast('データなし');return;}var head=rows[0].map(function(s){return s.trim();}),idx={};head.forEach(function(h,i){idx[h]=i;});var pcs=head.filter(function(h){return h.indexOf('価格_')===0;}).map(function(h){return h.substring(3);});function g(row,n){var i=idx[n];return i==null?'':String(row[i]==null?'':row[i]).trim();}var cnt=0;
-  for(var k=1;k<rows.length;k++){var row=rows[k];if(!row.length||row.join('').trim()==='')continue;var cat=g(row,'カテゴリ');if(!cat)continue;var id=g(row,'商品ID')||nextId(prefixOf(cat));var prices={};pcs.forEach(function(ch){var v=g(row,'価格_'+ch);if(v!=='')prices[ch]=Number(v)||0;});
-    var o={id:id,category:cat,subCategory:g(row,'小カテゴリ'),maker:g(row,'メーカー'),name:g(row,'商品名'),condition:g(row,'状態'),opCondition:g(row,'動作状態'),accessory:g(row,'付属品'),staff:g(row,'仕入担当者'),cost:Number(g(row,'仕入価格'))||0,buyDate:g(row,'仕入日'),photo:g(row,'写真URL'),status:g(row,'ステータス')||'未販売',listDate:g(row,'販売開始日'),shipPattern:g(row,'送料パターン'),prices:prices,home:g(row,'自宅保管')!=='',shipCheck:g(row,'送料確認')!=='',channel:g(row,'販路'),salePrice:g(row,'実売価格')!==''?Number(g(row,'実売価格')):'',profit:g(row,'実利益')!==''?Number(g(row,'実利益')):'',shipDate:g(row,'出荷日'),saleDate:g(row,'売却日'),note:g(row,'備考')};computeProfits(o);state.items.push(o);cnt++;}
-  STOCK=state.items;save();rebuildAll();renderDash(dashFromStock());toast(cnt+'件を取り込みました');};r.readAsText(f);inp.value='';}
+function doImport(inp){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(){var data;try{data=JSON.parse(r.result);}catch(e){toast('JSON読込失敗');return;}if(!confirm('現在のデータを上書きします。よろしいですか？')){inp.value='';return;}var keep={cloudUrl:state.cloudUrl,cloudSecret:state.cloudSecret,lineDirect:state.lineDirect};state=normalize(data);Object.assign(state,keep);localStorage.setItem(KEY,JSON.stringify(state));rebuildAll();renderDash(dashFromStock());if(CU())pushCloud();toast('インポートしました');};r.readAsText(f);inp.value='';}
+function readCsvFile(file){return new Promise(function(res){var r=new FileReader();r.onload=function(){var buf=r.result,txt;try{txt=new TextDecoder('utf-8',{fatal:false}).decode(buf);}catch(e){txt='';}if(txt.indexOf('カテゴリ')<0&&txt.indexOf('商品名')<0){try{txt=new TextDecoder('shift_jis').decode(buf);}catch(e2){}}res(txt.replace(/^﻿/,''));};r.readAsArrayBuffer(file);});}
+async function doCsvImport(inp){var f=inp.files[0];if(!f)return;if(!confirm('CSVを在庫に追加します。よろしいですか？')){inp.value='';return;}var text=await readCsvFile(f);var rows=parseCsv(text);if(rows.length<2){toast('データが読めませんでした（保存時に「CSV UTF-8」を選ぶと確実です）');return;}
+  var head=rows[0].map(function(s){return s.trim();}),idx={};head.forEach(function(h,i){idx[h]=i;});if(idx['カテゴリ']==null&&idx['商品名']==null){toast('見出しが一致しません。雛形をDLして列名を合わせてください');return;}
+  var pcs=head.filter(function(h){return h.indexOf('価格_')===0;}).map(function(h){return h.substring(3);});function g(row,n){var i=idx[n];return i==null?'':String(row[i]==null?'':row[i]).trim();}var cnt=0;
+  for(var k=1;k<rows.length;k++){var row=rows[k];if(!row.length||row.join('').trim()==='')continue;var cat=g(row,'カテゴリ'),nm=g(row,'商品名');if(!cat&&!nm)continue;if(!cat)cat=CFG.categories[0]['カテゴリ名'];var id=g(row,'商品ID')||nextId(prefixOf(cat));var prices={};pcs.forEach(function(ch){var v=g(row,'価格_'+ch);if(v!=='')prices[ch]=Number(v)||0;});
+    var o={id:id,category:cat,subCategory:g(row,'小カテゴリ'),maker:g(row,'メーカー'),name:nm,condition:g(row,'状態'),opCondition:g(row,'動作状態'),accessory:g(row,'付属品'),staff:g(row,'仕入担当者'),cost:Number(g(row,'仕入価格'))||0,buyDate:g(row,'仕入日'),photo:g(row,'写真URL'),status:g(row,'ステータス')||'未販売',listDate:g(row,'販売開始日'),shipPattern:g(row,'送料パターン'),prices:prices,home:g(row,'自宅保管')!=='',shipCheck:g(row,'送料確認')!=='',channel:g(row,'販路'),salePrice:g(row,'実売価格')!==''?Number(g(row,'実売価格')):'',profit:g(row,'実利益')!==''?Number(g(row,'実利益')):'',shipDate:g(row,'出荷日'),saleDate:g(row,'売却日'),note:g(row,'備考')};computeProfits(o);state.items.push(o);cnt++;}
+  STOCK=state.items;save();rebuildAll();renderDash(dashFromStock());toast(cnt+'件を取り込みました');inp.value='';}
 
 initApp();
 
