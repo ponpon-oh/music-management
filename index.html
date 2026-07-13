@@ -165,6 +165,7 @@
     <div class="card"><h2>動作状態</h2><div id="setOpcond"></div><button class="btn ghost sm" onclick="addSetRow('opcond')">＋行</button><button class="btn sm" onclick="saveSet('op_conditions')">保存</button></div>
     <div class="card"><h2>ステータス</h2><p class="muted">※「売却済み」は集計の予約名。残してください。</p><div id="setStatus"></div><button class="btn ghost sm" onclick="addSetRow('status')">＋行</button><button class="btn sm" onclick="saveSet('statuses')">保存</button></div>
     <div class="card"><h2>販売期間の色分け</h2><div id="setPColor"></div><button class="btn ghost sm" onclick="addSetRow('pcolor')">＋行</button><button class="btn sm" onclick="saveSet('period_colors')">保存</button></div>
+    <div class="card" style="border-color:#fdecea"><details><summary style="cursor:pointer;color:var(--bad);font-weight:700">⚠ 危険な操作（全データ初期化）</summary><p class="muted" style="margin-top:8px">この端末のデータを消去し初期状態に戻します。クラウド同期がオンの場合はその内容も上書きされます。<b>元に戻せません。</b>心配なら先に「JSONエクスポート」でバックアップを。</p><button class="btn danger" onclick="resetAll()">全データを初期化する</button></details></div>
   </section>
 </main>
 </div>
@@ -418,6 +419,7 @@ function renderManage(){
         +'<div class="sub">'+esc(x.condition||'')+(x.opCondition?' ・ '+esc(x.opCondition):'')+(x.accessory?' ・ '+esc(x.accessory):'')+'</div>'
         +'<div class="sub">仕入 '+yen(x.cost)+'円'+(dates.length?' ・ '+dates.join(' ・ '):'')+'</div>'
         +'<div class="flags"><label><input type="checkbox" class="e-home"'+(x.home?' checked':'')+'> 🏠自宅保管</label><label><input type="checkbox" class="e-chk"'+(x.shipCheck?' checked':'')+'> 📮送料確認</label></div>'
+        +'<div style="margin-top:6px"><label style="margin:0">備考（短文メモ）</label><input class="e-note" value="'+esc(x.note||'')+'" placeholder="例：ノブ欠品／要清掃 など"></div>'
         +'<div class="ctrl" style="margin-top:8px"><div class="f"><label>ステータス</label><select class="e-status">'+opt(CFG.statuses,x.status)+'</select></div>'
           +'<div class="f"><label>送料パターン</label><select class="e-ship" onchange="recalc(\''+id+'\')">'+optPattern(x.shipPattern)+'</select></div>'+pin+'</div>'
         +'<div class="prof" id="prof-'+id+'" style="margin-top:8px"></div>'
@@ -680,12 +682,12 @@ function saveItem(id){
   var editing=false,ed=document.getElementById('edit-'+id),patch={status:row.querySelector('.e-status').value,shipPattern:row.querySelector('.e-ship').value,home:row.querySelector('.e-home').checked,shipCheck:row.querySelector('.e-chk').checked};
   if(ed&&ed.style.display!=='none'){editing=true;patch.category=row.querySelector('.ed-cat').value;patch.subCategory=row.querySelector('.ed-sub').value;patch.maker=row.querySelector('.ed-maker').value.trim();patch.name=row.querySelector('.ed-name').value.trim();patch.cost=Number(row.querySelector('.ed-cost').value)||0;patch.condition=row.querySelector('.ed-cond').value;patch.opCondition=row.querySelector('.ed-op').value;patch.staff=row.querySelector('.ed-staff').value;patch.accessory=row.querySelector('.ed-acc').value.trim();}
   var it=state.items.filter(function(x){return x.id===id;})[0];if(!it)return;
-  var revert={status:it.status,shipPattern:it.shipPattern,prices:it.prices,home:it.home,shipCheck:it.shipCheck,listDate:it.listDate,saleDate:it.saleDate};
+  var revert={status:it.status,shipPattern:it.shipPattern,prices:it.prices,home:it.home,shipCheck:it.shipCheck,listDate:it.listDate,saleDate:it.saleDate,note:it.note};
   if(editing){revert.category=it.category;revert.subCategory=it.subCategory;revert.maker=it.maker;revert.name=it.name;revert.cost=it.cost;revert.condition=it.condition;revert.opCondition=it.opCondition;revert.staff=it.staff;revert.accessory=it.accessory;}
   it.status=patch.status;it.shipPattern=patch.shipPattern;it.home=patch.home;it.shipCheck=patch.shipCheck;it.prices=prices;
   if(patch.status==='販売中'&&!it.listDate)it.listDate=todayStr();if(patch.status==='売却済み'&&!it.saleDate)it.saleDate=todayStr();
   if(editing){it.category=patch.category;it.subCategory=patch.subCategory;it.maker=patch.maker;it.name=patch.name;it.cost=patch.cost;it.condition=patch.condition;it.opCondition=patch.opCondition;it.staff=patch.staff;it.accessory=patch.accessory;}
-  computeProfits(it);logAction('編集',id,it.name,'在庫を更新',revert);openSet[id]=true;save();renderManage();refreshOpenLogs();toast('保存しました');}
+  var _n=row.querySelector('.e-note');if(_n)it.note=_n.value;computeProfits(it);logAction('編集',id,it.name,'在庫を更新',revert);openSet[id]=true;save();renderManage();refreshOpenLogs();toast('保存しました');}
 
 function pickPhoto(id){photoTargetId=id;document.getElementById('photoPicker').click();}
 async function doPhotoUpload(id,file){toast('写真を処理中…');var dataUrl=await resizeImage(file,1000,0.82);var it=state.items.filter(function(x){return x.id===id;})[0];if(!it)return;
@@ -748,9 +750,10 @@ async function doCsvImport(inp){var f=inp.files[0];if(!f)return;if(!confirm('CSV
   var head=rows[0].map(function(s){return s.trim();}),idx={};head.forEach(function(h,i){idx[h]=i;});if(idx['カテゴリ']==null&&idx['商品名']==null){toast('見出しが一致しません。雛形をDLして列名を合わせてください');return;}
   var pcs=head.filter(function(h){return h.indexOf('価格_')===0;}).map(function(h){return h.substring(3);});function g(row,n){var i=idx[n];return i==null?'':String(row[i]==null?'':row[i]).trim();}var cnt=0;
   for(var k=1;k<rows.length;k++){var row=rows[k];if(!row.length||row.join('').trim()==='')continue;var cat=g(row,'カテゴリ'),nm=g(row,'商品名');if(!cat&&!nm)continue;if(!cat)cat=CFG.categories[0]['カテゴリ名'];var id=g(row,'商品ID')||nextId(prefixOf(cat));var prices={};pcs.forEach(function(ch){var v=g(row,'価格_'+ch);if(v!=='')prices[ch]=Number(v)||0;});
-    var o={id:id,category:cat,subCategory:g(row,'小カテゴリ'),maker:g(row,'メーカー'),name:nm,condition:g(row,'状態'),opCondition:g(row,'動作状態'),accessory:g(row,'付属品'),staff:g(row,'仕入担当者'),cost:Number(g(row,'仕入価格'))||0,buyDate:g(row,'仕入日'),photo:g(row,'写真URL'),status:g(row,'ステータス')||'未販売',listDate:g(row,'販売開始日'),shipPattern:g(row,'送料パターン'),prices:prices,home:g(row,'自宅保管')!=='',shipCheck:g(row,'送料確認')!=='',channel:g(row,'販路'),salePrice:g(row,'実売価格')!==''?Number(g(row,'実売価格')):'',profit:g(row,'実利益')!==''?Number(g(row,'実利益')):'',shipDate:g(row,'出荷日'),saleDate:g(row,'売却日'),note:g(row,'備考')};computeProfits(o);state.items.push(o);cnt++;}
+    var o={id:id,category:cat,subCategory:g(row,'小カテゴリ'),maker:g(row,'メーカー'),name:nm,condition:g(row,'状態'),opCondition:g(row,'動作状態'),accessory:g(row,'付属品'),staff:g(row,'仕入担当者'),cost:Number(g(row,'仕入価格'))||0,buyDate:g(row,'仕入日'),photo:g(row,'写真URL'),status:g(row,'ステータス')||'未販売',listDate:g(row,'販売開始日'),shipPattern:g(row,'送料パターン'),prices:prices,home:g(row,'自宅保管')!=='',shipCheck:g(row,'送料確認')!=='',channel:g(row,'販路'),salePrice:g(row,'実売価格')!==''?Number(g(row,'実売価格')):'',profit:g(row,'実利益')!==''?Number(g(row,'実利益')):'',shipDate:g(row,'出荷日'),saleDate:g(row,'売却日'),note:g(row,'備考')};computeProfits(o);var _ex=state.items.filter(function(z){return z.id===o.id;})[0];if(_ex){Object.assign(_ex,o);}else{state.items.push(o);}cnt++;}
   STOCK=state.items;save();rebuildAll();renderDash(dashFromStock());toast(cnt+'件を取り込みました');inp.value='';}
 
+function resetAll(){if(!confirm('本当に全データを初期化しますか？（元に戻せません）'))return;if(!confirm('最終確認：この端末のデータを消して初期状態に戻します。よろしいですか？'))return;var keep={cloudUrl:state.cloudUrl,cloudSecret:state.cloudSecret,lineDirect:state.lineDirect};state=defaultState();Object.assign(state,keep);localStorage.setItem(KEY,JSON.stringify(state));rebuildAll();renderDash(dashFromStock());if(CU())pushCloud();toast('全データを初期化しました');}
 initApp();
 
 </script>
