@@ -410,8 +410,7 @@ function renderManage(){
     var pin=CFG.channels.map(function(c){var n=c['販路名'];return '<div class="f pf"><label>'+esc(n)+'価格</label><input type="number" inputmode="numeric" class="e-price" data-ch="'+esc(n)+'" value="'+(x.prices[n]||'')+'" oninput="recalc(\''+id+'\')"></div>';}).join('');
     return '<div class="item" id="it-'+id+'">'
       +'<div class="ph" '+phS+' onclick="pickPhoto(\''+id+'\')">'+phI+'</div>'
-      +'<div class="head" onclick="toggleItem(\''+id+'\')" style="flex:1;min-width:150px;cursor:pointer"><div class="nm" style="font-size:22px;font-weight:600">'+esc(x.name)+'</div><div style="margin-top:4px"><span class="pill bigpill '+esc(x.status)+'">'+esc(x.status)+'</span> <span class="muted" style="font-family:monospace">'+id+'</span></div></div>'
-      +'<div class="period" style="background:'+bg+';color:'+fg+'"><div class="n">'+(per==null?'–':per)+'</div><div class="l">'+pl+'(日)</div></div>'
+      +'<div class="head" onclick="toggleItem(\''+id+'\')" style="flex:1;min-width:150px;cursor:pointer"><div class="nm" style="font-size:22px;font-weight:600">'+esc(x.name)+'</div><div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="pill bigpill '+esc(x.status)+'">'+esc(x.status)+'</span> <span class="muted" style="font-family:monospace">'+id+'</span>'+(per!=null?'<span style="background:'+bg+';color:'+fg+';padding:3px 10px;border-radius:10px;font-weight:800;white-space:nowrap">'+(x.status==='販売中'?'販売中 ':'')+per+'日</span>':'')+'</div></div>'
       +'<button class="btn ghost sm" id="caret-'+id+'" onclick="toggleItem(\''+id+'\')">'+(openSet[x.id]?'▲':'▼')+'</button>'
       +'<div class="body" id="body-'+id+'" style="display:'+(openSet[x.id]?'block':'none')+';width:100%">'
         +'<div class="hr"></div>'
@@ -664,7 +663,7 @@ function loadAll(){if(CU())pullCloud(true);else rebuildAll();}
 function reloadData(){loadAll();}
 function doLogin(){}
 function doLogout(){toast('データはこの端末＋（設定時）クラウドに保存されています');}
-function lineUrl(msg,photo){var t=msg+(photo?('\n写真: '+photo):'');return 'https://line.me/R/msg/text/?'+encodeURIComponent(t);}
+function lineUrl(msg,photo){return 'https://line.me/R/msg/text/?'+encodeURIComponent(msg);}
 async function sendLineDirect(text,photo){var url=CU();if(!url)return {ok:false,msg:'クラウド未設定'};try{var res=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'line',secret:CS(),text:text,image:photo||''})});var j=await res.json();return {ok:!j.error,msg:JSON.stringify(j)};}catch(e){return {ok:false,msg:String(e.message||e)};}}
 
 function submitPurchase(){
