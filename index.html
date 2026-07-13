@@ -165,7 +165,7 @@
     <div class="card"><h2>動作状態</h2><div id="setOpcond"></div><button class="btn ghost sm" onclick="addSetRow('opcond')">＋行</button><button class="btn sm" onclick="saveSet('op_conditions')">保存</button></div>
     <div class="card"><h2>ステータス</h2><p class="muted">※「売却済み」は集計の予約名。残してください。</p><div id="setStatus"></div><button class="btn ghost sm" onclick="addSetRow('status')">＋行</button><button class="btn sm" onclick="saveSet('statuses')">保存</button></div>
     <div class="card"><h2>販売期間の色分け</h2><div id="setPColor"></div><button class="btn ghost sm" onclick="addSetRow('pcolor')">＋行</button><button class="btn sm" onclick="saveSet('period_colors')">保存</button></div>
-    <div class="card" style="border-color:#fdecea"><details><summary style="cursor:pointer;color:var(--bad);font-weight:700">⚠ 危険な操作（全データ初期化）</summary><p class="muted" style="margin-top:8px">この端末のデータを消去し初期状態に戻します。クラウド同期がオンの場合はその内容も上書きされます。<b>元に戻せません。</b>心配なら先に「JSONエクスポート」でバックアップを。</p><button class="btn danger" onclick="resetAll()">全データを初期化する</button></details></div>
+    <div class="card" style="border-color:#fdecea"><details><summary style="cursor:pointer;color:var(--bad);font-weight:700">⚠ 危険な操作（在庫・出荷データの初期化）</summary><p class="muted" style="margin-top:8px">在庫・仕入れ・発注/出荷・ログのデータを消去します。<b>カテゴリ・販路・送料などの設定は残ります。</b>クラウド同期がオンの場合はその内容も上書きされます。<b>元に戻せません。</b>心配なら先に「JSONエクスポート」でバックアップを。</p><button class="btn danger" onclick="resetAll()">在庫・出荷データを初期化する（設定は残す）</button></details></div>
   </section>
 </main>
 </div>
@@ -752,7 +752,7 @@ async function doCsvImport(inp){var f=inp.files[0];if(!f)return;if(!confirm('CSV
     var o={id:id,category:cat,subCategory:g(row,'小カテゴリ'),maker:g(row,'メーカー'),name:nm,condition:g(row,'状態'),opCondition:g(row,'動作状態'),accessory:g(row,'付属品'),staff:g(row,'仕入担当者'),cost:Number(g(row,'仕入価格'))||0,buyDate:g(row,'仕入日'),photo:g(row,'写真URL'),status:g(row,'ステータス')||'未販売',listDate:g(row,'販売開始日'),shipPattern:g(row,'送料パターン'),prices:prices,home:g(row,'自宅保管')!=='',shipCheck:g(row,'送料確認')!=='',channel:g(row,'販路'),salePrice:g(row,'実売価格')!==''?Number(g(row,'実売価格')):'',profit:g(row,'実利益')!==''?Number(g(row,'実利益')):'',shipDate:g(row,'出荷日'),saleDate:g(row,'売却日'),note:g(row,'備考')};computeProfits(o);var _ex=state.items.filter(function(z){return z.id===o.id;})[0];if(_ex){Object.assign(_ex,o);}else{state.items.push(o);}cnt++;}
   STOCK=state.items;save();rebuildAll();renderDash(dashFromStock());toast(cnt+'件を取り込みました');inp.value='';}
 
-function resetAll(){if(!confirm('本当に全データを初期化しますか？（元に戻せません）'))return;if(!confirm('最終確認：この端末のデータを消して初期状態に戻します。よろしいですか？'))return;var keep={cloudUrl:state.cloudUrl,cloudSecret:state.cloudSecret,lineDirect:state.lineDirect};state=defaultState();Object.assign(state,keep);localStorage.setItem(KEY,JSON.stringify(state));rebuildAll();renderDash(dashFromStock());if(CU())pushCloud();toast('全データを初期化しました');}
+function resetAll(){if(!confirm('在庫・仕入れ・発注/出荷・ログのデータを消去します。設定（カテゴリ・販路・送料など）は残ります。よろしいですか？（元に戻せません）'))return;if(!confirm('最終確認：本当に在庫・出荷などのデータを消去しますか？'))return;var keepSettings=state.settings,keepCloud={cloudUrl:state.cloudUrl,cloudSecret:state.cloudSecret,lineDirect:state.lineDirect};state=defaultState();state.settings=keepSettings;Object.assign(state,keepCloud);localStorage.setItem(KEY,JSON.stringify(state));rebuildAll();renderDash(dashFromStock());if(CU())pushCloud();toast('在庫・出荷データを初期化しました（設定は保持）');}
 initApp();
 
 </script>
