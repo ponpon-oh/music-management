@@ -102,12 +102,14 @@
       <div id="stockSummary" class="summary"></div>
       <div class="row" style="align-items:flex-end">
         <div><label>検索</label><input id="mSearch" oninput="renderManage()" placeholder="ID・商品名・メーカー"></div>
-        <div style="max-width:150px"><label>ステータス</label><select id="mStatus" onchange="renderManage()"></select></div>
+        <div style="max-width:190px"><label>並び替え</label><select id="mSort" onchange="renderManage()"><option value="">既定（登録順）</option><option value="pdesc">販売期間が長い順</option><option value="pasc">販売期間が短い順</option></select></div>
         <div style="max-width:100px"><label>期間 最小(日)</label><input type="number" id="pMin" oninput="renderManage()"></div>
         <div style="max-width:100px"><label>最大(日)</label><input type="number" id="pMax" oninput="renderManage()"></div>
         <div style="flex:0"><button class="btn ghost sm" onclick="reloadData()">更新</button></div>
       </div>
       <div class="catbtns" id="catBtns"></div>
+      <div class="muted" style="margin-top:8px">ステータス（複数選択できます／OR検索）</div>
+      <div class="catbtns" id="statusBtns"></div>
       <div class="catbtns"><button id="fbHome" onclick="toggleFlag('home',this)">🏠 自宅保管のみ</button><button id="fbChk" onclick="toggleFlag('chk',this)">📮 送料確認のみ</button></div>
       <label class="switch" style="margin-top:10px"><input type="checkbox" id="showImg" onchange="renderManage()"> 🖼 画像を表示する</label>
     </div>
@@ -392,14 +394,15 @@ function renderSummary(){var sc={},cc={};STOCK.forEach(function(x){sc[x.status]=
   $('stockSummary').innerHTML='<div><div class="muted">ステータス別</div>'+CFG.statuses.map(function(s){return '<span class="chip">'+esc(s)+' <b>'+(sc[s]||0)+'</b></span>';}).join('')+'</div><div><div class="muted">カテゴリ別在庫</div>'+catNames().map(function(c){return '<span class="chip">'+esc(c)+' <b>'+(cc[c]||0)+'</b></span>';}).join('')+'</div>';}
 function renderManage(){
   var el=$('manageList');if(!CFG||!el)return;renderSummary();
-  var q=$('mSearch').value.trim(),st=$('mStatus').value,showImg=$('showImg').checked,pMin=$('pMin').value,pMax=$('pMax').value,hasR=(pMin!==''||pMax!=='');
+  var q=$('mSearch').value.trim(),showImg=$('showImg').checked,pMin=$('pMin').value,pMax=$('pMax').value,hasR=(pMin!==''||pMax!=='');
   var list=STOCK.filter(function(x){
     if(!(manageCat==='すべて'||x.category===manageCat))return false;
-    if(!(st==='すべて'||x.status===st))return false;
+    if(statusFilter.length&&statusFilter.indexOf(x.status)<0)return false;
     if(filterHome&&!x.home)return false;if(filterChk&&!x.shipCheck)return false;
     if(q&&!match(x,q))return false;
     if(hasR){var per=salePeriod(x);if(per==null)return false;if(pMin!==''&&per<Number(pMin))return false;if(pMax!==''&&per>Number(pMax))return false;}
     return true;});
+  list=sortList(list);
   if(!list.length){el.innerHTML='<div class="loading">該当なし</div>';return;}
   el.innerHTML=list.map(function(x){
     var id=esc(x.id);
@@ -752,6 +755,21 @@ async function doCsvImport(inp){var f=inp.files[0];if(!f)return;if(!confirm('CSV
     var o={id:id,category:cat,subCategory:g(row,'小カテゴリ'),maker:g(row,'メーカー'),name:nm,condition:g(row,'状態'),opCondition:g(row,'動作状態'),accessory:g(row,'付属品'),staff:g(row,'仕入担当者'),cost:Number(g(row,'仕入価格'))||0,buyDate:g(row,'仕入日'),photo:g(row,'写真URL'),status:g(row,'ステータス')||'未販売',listDate:g(row,'販売開始日'),shipPattern:g(row,'送料パターン'),prices:prices,home:g(row,'自宅保管')!=='',shipCheck:g(row,'送料確認')!=='',channel:g(row,'販路'),salePrice:g(row,'実売価格')!==''?Number(g(row,'実売価格')):'',profit:g(row,'実利益')!==''?Number(g(row,'実利益')):'',shipDate:g(row,'出荷日'),saleDate:g(row,'売却日'),note:g(row,'備考')};computeProfits(o);var _ex=state.items.filter(function(z){return z.id===o.id;})[0];if(_ex){Object.assign(_ex,o);}else{state.items.push(o);}cnt++;}
   STOCK=state.items;save();rebuildAll();renderDash(dashFromStock());toast(cnt+'件を取り込みました');inp.value='';}
 
+var statusFilter=['未販売'];
+function fillSelectors(){
+  document.getElementById('shipChannel').innerHTML=opt(channelNames(),channelNames()[0]);
+  document.getElementById('shipPattern').innerHTML='<option value=""></option>'+CFG.shipPatterns.map(function(p){return '<option value="'+esc(p.name)+'">'+esc(p.name)+'（'+yen(p.amount)+'円）</option>';}).join('');
+  document.getElementById('catBtns').innerHTML=['すべて'].concat(catNames()).map(function(c){return '<button class="'+(c===manageCat?'active':'')+'" onclick="setCat(\''+c+'\',this)">'+esc(c)+'</button>';}).join('');
+  buildStatusBtns();
+}
+function buildStatusBtns(){var el=document.getElementById('statusBtns');if(!el||!CFG)return;
+  el.innerHTML='<button class="'+(statusFilter.length===0?'active':'')+'" onclick="clearStatus()">すべて</button>'+CFG.statuses.map(function(st){return '<button class="'+(statusFilter.indexOf(st)>=0?'active':'')+'" onclick="toggleStatus(\''+st+'\')">'+esc(st)+'</button>';}).join('');}
+function toggleStatus(st){var i=statusFilter.indexOf(st);if(i>=0)statusFilter.splice(i,1);else statusFilter.push(st);buildStatusBtns();renderManage();}
+function clearStatus(){statusFilter=[];buildStatusBtns();renderManage();}
+function sortList(list){var m=document.getElementById('mSort'),v=m?m.value:'';if(!v)return list;
+  return list.slice().sort(function(a,b){var pa=salePeriod(a),pb=salePeriod(b);
+    if(pa==null&&pb==null)return 0;if(pa==null)return 1;if(pb==null)return -1;
+    return v==='pdesc'?(pb-pa):(pa-pb);});}
 function resetAll(){if(!confirm('在庫・仕入れ・発注/出荷・ログのデータを消去します。設定（カテゴリ・販路・送料など）は残ります。よろしいですか？（元に戻せません）'))return;if(!confirm('最終確認：本当に在庫・出荷などのデータを消去しますか？'))return;var keepSettings=state.settings,keepCloud={cloudUrl:state.cloudUrl,cloudSecret:state.cloudSecret,lineDirect:state.lineDirect};state=defaultState();state.settings=keepSettings;Object.assign(state,keepCloud);localStorage.setItem(KEY,JSON.stringify(state));rebuildAll();renderDash(dashFromStock());if(CU())pushCloud();toast('在庫・出荷データを初期化しました（設定は保持）');}
 initApp();
 
