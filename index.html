@@ -681,7 +681,8 @@ function loadAll(){if(CU())pullCloud(true);else rebuildAll();}
 function reloadData(){loadAll();}
 function doLogin(){}
 function doLogout(){toast('データはこの端末＋（設定時）クラウドに保存されています');}
-function lineUrl(msg,photo){return 'https://line.me/R/msg/text/?'+encodeURIComponent(msg);}
+function directImg(u){if(!u||!/^https?:/.test(u))return '';var m=/[?&]id=([^&]+)/.exec(u)||/\/d\/([^/=?]+)/.exec(u);return m?('https://lh3.googleusercontent.com/d/'+m[1]+'=w1024'):u;}
+function lineUrl(msg,photo){var img=directImg(photo);var t=msg+(img?('\n商品写真：'+img):'');return 'https://line.me/R/share?text='+encodeURIComponent(t);}
 async function sendLineDirect(text,photo){var url=CU();if(!url)return {ok:false,msg:'クラウド未設定'};try{var res=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'line',secret:CS(),text:text,image:photo||''})});var j=await res.json();return {ok:!j.error,msg:JSON.stringify(j)};}catch(e){return {ok:false,msg:String(e.message||e)};}}
 
 function submitPurchase(){
@@ -719,17 +720,11 @@ function doShip(){var x=SEL.ship;if(!x)return;var ch=document.getElementById('sh
   logAction('出荷',x.id,x.name,ch+' '+price+'円 / 利益 '+profit+'円 / '+method+'('+pat+')',null);save();
   var link=lineUrl(msg,x.photo);
   var out='<div class="hr"></div><div class="msgbox"><b>在庫から差引しました（発送方法：'+esc(method)+' / 利益 '+yen(profit)+'円）</b></div>';
-  if(state.lineDirect && CU()){
-    out+='<div class="muted" id="lineSendStat" style="margin-top:8px">公式LINEへ送信中…</div>';
-    document.getElementById('shipOut').innerHTML=out+(x.photo?'<img src="'+esc(x.photo)+'" style="max-width:220px;border-radius:8px;margin-top:6px">':'');
-    sendLineDirect(msg,x.photo).then(function(r){var el=document.getElementById('lineSendStat');if(el)el.innerHTML=r.ok?'✅ 公式LINEに送信しました（画像含む）':'⚠ 送信失敗: '+esc(r.msg)+'<br><a class="btn sm" target="_blank" href="'+link+'">手動でLINEを開く ↗</a>';});
-  } else {
-    try{window.open(link,'_blank');}catch(e){}
-    out+='<p style="margin-top:8px"><a class="btn accent" style="text-decoration:none;display:inline-block;font-size:16px;padding:12px 20px" target="_blank" href="'+link+'">📩 LINEを開いて送信</a></p>';
-    out+='<p class="muted">↑が開かない場合はこのボタンをタップ。'+(x.photo?'写真は下の画像を長押し保存して添付してください。':'')+'</p>';
-    out+=(x.photo?'<img src="'+esc(x.photo)+'" style="max-width:220px;border-radius:8px">':'');
-    document.getElementById('shipOut').innerHTML=out;
-  }
+  try{window.open(link,'_blank');}catch(e){}
+  out+='<p style="margin-top:8px"><a class="btn accent" style="text-decoration:none;display:inline-block;font-size:16px;padding:12px 20px" target="_blank" href="'+link+'">📩 LINEを開いて送信</a></p>';
+  out+='<p class="muted">↑をタップするとLINEの送信画面が開き、宛先（個人・グループ）を選んで送れます。文面には商品写真のリンクが入り、送信するとLINE上に写真プレビューが表示されます（受け手はタップで拡大表示）。</p>';
+  out+=(x.photo?'<p class="muted">※写真そのものを画像として添付したい場合は、下の写真を長押し保存してから添付してください。</p><img src="'+esc(x.photo)+'" style="max-width:220px;border-radius:8px">':'');
+  document.getElementById('shipOut').innerHTML=out;
   document.getElementById('shipGo').textContent='完了（差引済み）';renderManage();renderShipList();renderDash(dashFromStock());refreshOpenLogs();toast('在庫から差し引きました');}
 
 function mapLog(g){return {logId:g.id,date:g.at,type:g.type,id:g.item_id,name:g.name,detail:g.detail,state:g.state};}
