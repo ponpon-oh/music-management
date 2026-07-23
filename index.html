@@ -59,6 +59,12 @@
   .setrow{display:flex;gap:8px;margin-bottom:6px} .setrow input{flex:1} .setrow button{flex:0 0 auto}
   .switch{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--sub);cursor:pointer} .switch input{width:auto} .cf-field{min-width:130px}
   #login{max-width:360px;margin:12vh auto;padding:24px} #login h1{font-size:20px;text-align:center;margin:0 0 4px} #login p{text-align:center;color:var(--sub);margin:0 0 16px}
+  .herorow{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+  .herorow .hero{margin-bottom:0}
+  .hero .n{font-size:clamp(26px,4.4vw,46px)}
+  .hero.fy{background:linear-gradient(135deg,#1565c0,#42a5f5)}
+  .hero.mo{background:linear-gradient(135deg,#ef6c00,#ffa726)}
+  @media(max-width:760px){.herorow{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -310,7 +316,11 @@ function renderDash(d){
   var catRows=cats.map(function(c){var o=d.byCategory[c];var rate=(o.revenue>0)?(Math.round(o.profit/o.revenue*1000)/10)+'%':'—';return '<tr><td>'+esc(c)+'</td><td>'+o.sold+'</td><td>'+profitHtml(o.profit)+'</td><td>'+rate+'</td></tr>';}).join('')||'<tr><td colspan="4" class="muted">データなし</td></tr>';
   var sales=d.recentSales.map(function(s){return '<tr><td>'+esc(s.date)+'</td><td>'+esc(s.id)+'</td><td>'+esc(s.name)+'</td><td>'+esc(s.channel)+'</td><td>'+yen(s.salePrice)+'</td><td>'+profitHtml(s.profit)+'</td></tr>';}).join('')||'<tr><td colspan="6" class="muted">まだ売上がありません</td></tr>';
   $('dashBody').innerHTML=
-    '<div class="hero"><div class="l">累計利益</div><div class="n">'+yen(d.grossProfit)+' 円</div><div class="s">販売価格 − 仕入価格 − 手数料 − 送料</div></div>'
+    '<div class="herorow">'
+    +'<div class="hero"><div class="l">累計利益</div><div class="n">'+yen(d.grossProfit)+' 円</div><div class="s">全期間</div></div>'
+    +'<div class="hero fy"><div class="l">今年度利益</div><div class="n">'+yen(d.fyProfit)+' 円</div><div class="s">'+esc(d.fyLabel||'')+'</div></div>'
+    +'<div class="hero mo"><div class="l">今月利益</div><div class="n">'+yen(d.monthProfit)+' 円</div><div class="s">'+esc(d.monthLabel||'')+'</div></div>'
+    +'</div>'
     +'<div class="kpis"><div class="kpi blue"><div class="n">'+d.marginRate+'%</div><div class="l">利益率（累計利益÷累計売上）</div></div>'
       +'<div class="kpi"><div class="n">'+yen(d.soldRevenue)+'円</div><div class="l">累計売上</div></div>'
       +'<div class="kpi green"><div class="n">'+yen(d.netProfit)+'円</div><div class="l">累計キャッシュフロー（利益−在庫評価額）</div></div></div>'
@@ -755,6 +765,34 @@ async function doCsvImport(inp){var f=inp.files[0];if(!f)return;if(!confirm('CSV
     var o={id:id,category:cat,subCategory:g(row,'小カテゴリ'),maker:g(row,'メーカー'),name:nm,condition:g(row,'状態'),opCondition:g(row,'動作状態'),accessory:g(row,'付属品'),staff:g(row,'仕入担当者'),cost:Number(g(row,'仕入価格'))||0,buyDate:g(row,'仕入日'),photo:g(row,'写真URL'),status:g(row,'ステータス')||'未販売',listDate:g(row,'販売開始日'),shipPattern:g(row,'送料パターン'),prices:prices,home:g(row,'自宅保管')!=='',shipCheck:g(row,'送料確認')!=='',channel:g(row,'販路'),salePrice:g(row,'実売価格')!==''?Number(g(row,'実売価格')):'',profit:g(row,'実利益')!==''?Number(g(row,'実利益')):'',shipDate:g(row,'出荷日'),saleDate:g(row,'売却日'),note:g(row,'備考')};computeProfits(o);var _ex=state.items.filter(function(z){return z.id===o.id;})[0];if(_ex){Object.assign(_ex,o);}else{state.items.push(o);}cnt++;}
   STOCK=state.items;save();rebuildAll();renderDash(dashFromStock());toast(cnt+'件を取り込みました');inp.value='';}
 
+var FISCAL_START_MONTH=1; /* 1=暦年(1〜12月)。4月始まりの年度にしたい場合は 4 に変更 */
+function fyOf(y,m){return (m>=FISCAL_START_MONTH)?y:y-1;}
+function dashFromStock(){
+  var g=0,rev=0,sc=0,sv=0,byCat={},recent=[],monthly={},fyG=0,mG=0;
+  var now=new Date(),nowY=now.getFullYear(),nowM=now.getMonth()+1,curFY=fyOf(nowY,nowM);
+  STOCK.forEach(function(x){
+    if(!byCat[x.category])byCat[x.category]={sold:0,profit:0,revenue:0};
+    if(x.status==='売却済み'){
+      var r=Number(x.salePrice)||0,p=Number(x.profit)||0;
+      sc++;rev+=r;g+=p;byCat[x.category].sold++;byCat[x.category].profit+=p;byCat[x.category].revenue+=r;
+      recent.push({id:x.id,name:x.name,channel:x.channel,salePrice:x.salePrice,profit:x.profit,date:x.saleDate});
+      var mk=(x.saleDate&&x.saleDate.length>=7)?x.saleDate.substring(0,7).replace('/','-'):'未設定';
+      if(!monthly[mk])monthly[mk]={revenue:0,gross:0};monthly[mk].revenue+=r;monthly[mk].gross+=p;
+      var dt=parseD(x.saleDate);
+      if(dt){var yy=dt.getFullYear(),mm=dt.getMonth()+1;
+        if(fyOf(yy,mm)===curFY)fyG+=p;
+        if(yy===nowY&&mm===nowM)mG+=p;}
+    } else sv+=(Number(x.cost)||0);
+  });
+  recent.sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
+  var months=Object.keys(monthly).filter(function(m){return m!=='未設定';}).sort();
+  return {grossProfit:g,stockValue:sv,netProfit:g-sv,marginRate:rev>0?Math.round(g/rev*1000)/10:0,soldRevenue:rev,soldCount:sc,
+    fyProfit:fyG,monthProfit:mG,
+    fyLabel:(FISCAL_START_MONTH===1?(curFY+'年'):(curFY+'年度（'+FISCAL_START_MONTH+'月〜）')),
+    monthLabel:(nowY+'年'+nowM+'月'),
+    byCategory:byCat,recentSales:recent.slice(0,8),
+    monthly:months.map(function(m){return {month:m,revenue:monthly[m].revenue,gross:monthly[m].gross};})};
+}
 var statusFilter=['未販売'];
 function fillSelectors(){
   document.getElementById('shipChannel').innerHTML=opt(channelNames(),channelNames()[0]);
