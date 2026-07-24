@@ -157,9 +157,6 @@
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
       <label>合言葉（SECRET）</label><input id="cloudSecretInput" placeholder="Code.gsのSECRETと同じ">
       <div style="margin-top:8px"><button class="btn sm" onclick="saveCloudSettings()">接続して保存</button> <button class="btn ghost sm" onclick="testCloud()">接続テスト</button> <span id="cloudStatus" class="muted"></span></div></div>
-    <div class="card"><h2>💬 LINE送信</h2>
-      <p class="muted">オンにすると出荷時に公式LINEへ自動送信（画像も）。要：Code.gsにLINEチャネル設定。オフなら送信画面を開く方式。</p>
-      <label class="switch"><input type="checkbox" id="lineDirectChk" onchange="saveLineSetting()"> 直接送信（画像も送る）を使う</label></div>
     <div class="card"><h2>バックアップ / 取り込み</h2>
       <button class="btn sm" onclick="doExport()">⬇ JSONエクスポート</button>
       <button class="btn ghost sm" onclick="document.getElementById('importFile').click()">⬆ JSONインポート</button>
@@ -668,10 +665,9 @@ function pullCloud(force){if(!CU())return;var cb='__cb'+Date.now()+Math.floor(Ma
 function startPoll(){if(_pollStarted)return;_pollStarted=true;setInterval(function(){if(CU())pullCloud(false);},15000);}
 
 /* ---- クラウド設定UI ---- */
-function fillCloudUI(){var u=document.getElementById('cloudUrlInput'),s=document.getElementById('cloudSecretInput'),l=document.getElementById('lineDirectChk');if(u)u.value=state.cloudUrl||'';if(s)s.value=state.cloudSecret||'';if(l)l.checked=!!state.lineDirect;}
+function fillCloudUI(){var u=document.getElementById('cloudUrlInput'),s=document.getElementById('cloudSecretInput');if(u)u.value=state.cloudUrl||'';if(s)s.value=state.cloudSecret||'';}
 function saveCloudSettings(){state.cloudUrl=document.getElementById('cloudUrlInput').value.trim();state.cloudSecret=document.getElementById('cloudSecretInput').value.trim();localStorage.setItem(KEY,JSON.stringify(state));var st=document.getElementById('cloudStatus');if(CU()){if(st)st.textContent='接続中…';pullCloud(true);startPoll();}else{if(st)st.textContent='端末内のみ（同期オフ）';setSync('端末内保存（同期オフ）');}}
 function testCloud(){var st=document.getElementById('cloudStatus');state.cloudUrl=document.getElementById('cloudUrlInput').value.trim();state.cloudSecret=document.getElementById('cloudSecretInput').value.trim();if(!CU()){if(st)st.textContent='URLを入力してください';return;}if(st)st.textContent='テスト中…';pullCloud(true);}
-function saveLineSetting(){state.lineDirect=document.getElementById('lineDirectChk').checked;save();}
 
 function initApp(){document.getElementById('app').style.display='block';state=loadState();rebuildAll();initBuy();fillCloudUI();
   if(CU()){setSync('接続中…');pullCloud(true);startPoll();}else{setSync('端末内保存（同期オフ）');}}
@@ -683,7 +679,6 @@ function doLogin(){}
 function doLogout(){toast('データはこの端末＋（設定時）クラウドに保存されています');}
 function directImg(u){if(!u||!/^https?:/.test(u))return '';var m=/[?&]id=([^&]+)/.exec(u)||/\/d\/([^/=?]+)/.exec(u);return m?('https://lh3.googleusercontent.com/d/'+m[1]+'=w1024'):u;}
 function lineUrl(msg,photo){var img=directImg(photo);var t=msg+(img?('\n商品写真：'+img):'');return 'https://line.me/R/share?text='+encodeURIComponent(t);}
-async function sendLineDirect(text,photo){var url=CU();if(!url)return {ok:false,msg:'クラウド未設定'};try{var res=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'line',secret:CS(),text:text,image:photo||''})});var j=await res.json();return {ok:!j.error,msg:JSON.stringify(j)};}catch(e){return {ok:false,msg:String(e.message||e)};}}
 
 function submitPurchase(){
   var rows=document.querySelectorAll('#buyRows .purchase-row'),items=[];
@@ -718,12 +713,13 @@ function doShip(){var x=SEL.ship;if(!x)return;var ch=document.getElementById('sh
   var msg='【出荷依頼】\n商品ID：'+x.id+'\nメーカー：'+x.maker+'\n商品名：'+x.name+'\n発送方法：'+method+'\n依頼日：'+today;
   x.status='売却済み';x.shipPattern=pat;x.channel=ch;x.salePrice=price;x.profit=profit;x.shipDate=today;x.saleDate=today;computeProfits(x);
   logAction('出荷',x.id,x.name,ch+' '+price+'円 / 利益 '+profit+'円 / '+method+'('+pat+')',null);save();
-  var link=lineUrl(msg,x.photo);
   var out='<div class="hr"></div><div class="msgbox"><b>在庫から差引しました（発送方法：'+esc(method)+' / 利益 '+yen(profit)+'円）</b></div>';
-  try{window.open(link,'_blank');}catch(e){}
-  out+='<p style="margin-top:8px"><a class="btn accent" style="text-decoration:none;display:inline-block;font-size:16px;padding:12px 20px" target="_blank" href="'+link+'">📩 LINEを開いて送信</a></p>';
-  out+='<p class="muted">↑をタップするとLINEの送信画面が開き、宛先（個人・グループ）を選んで送れます。文面には商品写真のリンクが入り、送信するとLINE上に写真プレビューが表示されます（受け手はタップで拡大表示）。</p>';
-  out+=(x.photo?'<p class="muted">※写真そのものを画像として添付したい場合は、下の写真を長押し保存してから添付してください。</p><img src="'+esc(x.photo)+'" style="max-width:220px;border-radius:8px">':'');
+  var fullText=msg+(directImg(x.photo)?('\n商品写真：'+directImg(x.photo)):'');
+  var openUrl='https://line.me/R/msg/text/?'+encodeURIComponent(fullText);
+  try{window.open(openUrl,'_blank');}catch(e){}
+  out+='<p class="muted" style="margin-top:8px">LINEの送信画面を開きました。送信先のトークを選んで送信してください。開かない場合は下のボタンを押してください。</p>';
+  out+='<p><a class="btn accent" style="text-decoration:none;display:inline-block;font-size:16px;padding:12px 20px" target="_blank" href="'+openUrl+'">📩 LINEを開く</a></p>';
+  out+=(x.photo?'<p class="muted">写真を画像として添付する場合は下を長押し保存：</p><img src="'+esc(x.photo)+'" style="max-width:220px;border-radius:8px">':'');
   document.getElementById('shipOut').innerHTML=out;
   document.getElementById('shipGo').textContent='完了（差引済み）';renderManage();renderShipList();renderDash(dashFromStock());refreshOpenLogs();toast('在庫から差し引きました');}
 
