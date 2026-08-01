@@ -864,8 +864,12 @@ function anGroup(items,axis){
     o.rate=o.revenue>0?Math.round(o.profit/o.revenue*1000)/10:0;
     o.avgProfit=o.count?Math.round(o.profit/o.count):0;
     o.avgDays=o.dn?Math.round(o.ds/o.dn):null;o.diff=null;return o;});
-  if(axis==='month'){arr.sort(function(a,b){return a.key<b.key?-1:(a.key>b.key?1:0);});
-    for(var i=1;i<arr.length;i++)arr[i].diff=arr[i].profit-arr[i-1].profit;}
+  if(axis==='month'){
+    var ex=arr.filter(function(o){return o.key==='(未設定)';})[0];
+    arr=arr.filter(function(o){return o.key!=='(未設定)';});
+    arr.sort(function(a,b){return a.key<b.key?-1:(a.key>b.key?1:0);});
+    for(var i=1;i<arr.length;i++)arr[i].diff=arr[i].profit-arr[i-1].profit;
+    arr.excluded=ex?ex.count:0;}
   else arr.sort(function(a,b){return b.profit-a.profit;});
   return arr;
 }
@@ -942,7 +946,7 @@ function anTable(rows){
   var trate=tr2>0?Math.round(tp/tr2*1000)/10:0;
   var foot='<tr style="background:#f7f9fa;font-weight:700"><td>合計</td><td>'+tc+'</td><td>'+yen(tr2)+'</td><td>'+profitHtml(tp)+'</td><td>'+trate+'%</td><td>'+yen(tc?Math.round(tp/tc):0)+'</td><td>—</td>'+(isM?'<td>—</td>':'')+'</tr>';
   return '<div class="card"><h3>'+esc(anAxisLabel(anAxis))+' の内訳</h3>'
-    +(isM?'<p class="muted">売却日を基準に集計しています。</p>':'<p class="muted">行をタップすると、その区分でさらに詳しく見られます。</p>')
+    +(isM?'<p class="muted">売却日を基準に集計しています。'+(rows.excluded?'売却日が未入力の '+rows.excluded+' 件は除外しています。':'')+'</p>':'<p class="muted">行をタップすると、その区分でさらに詳しく見られます。</p>')
     +'<div style="overflow-x:auto"><table>'+head+body+foot+'</table></div>'
     +'<div style="margin-top:10px"><button class="btn ghost sm" onclick="anCsv()">⬇ この表をCSVで保存</button></div></div>';
 }
