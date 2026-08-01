@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>中古楽器 在庫管理</title>
+<title>中古販売</title>
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiB2aWV3Qm94PSIwIDAgMTI4IDEyOCI+PHJlY3Qgd2lkdGg9IjEyOCIgaGVpZ2h0PSIxMjgiIHJ4PSIyOCIgZmlsbD0iIzAwNjk1YyIvPjx0ZXh0IHg9IjY0IiB5PSI5MiIgZm9udC1zaXplPSI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+OuDwvdGV4dD48L3N2Zz4=">
   <link rel="apple-touch-icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxMjgiIGhlaWdodD0iMTI4IiB2aWV3Qm94PSIwIDAgMTI4IDEyOCI+PHJlY3Qgd2lkdGg9IjEyOCIgaGVpZ2h0PSIxMjgiIHJ4PSIyOCIgZmlsbD0iIzAwNjk1YyIvPjx0ZXh0IHg9IjY0IiB5PSI5MiIgZm9udC1zaXplPSI4MCIgdGV4dC1hbmNob3I9Im1pZGRsZSI+8J+OuDwvdGV4dD48L3N2Zz4=">
   <meta name="theme-color" content="#00695c">
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-title" content="楽器在庫">
+  <meta name="apple-mobile-web-app-title" content="中古販売">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root{--bg:#f4f6f8;--card:#fff;--ink:#263238;--sub:#607d8b;--line:#e0e4e8;--brand:#00695c;--brand2:#26a69a;--accent:#ef6c00;--ok:#2e7d32;--bad:#c62828;}
@@ -70,12 +70,15 @@
   .hero.fy{background:linear-gradient(135deg,#1565c0,#42a5f5)}
   .hero.mo{background:linear-gradient(135deg,#ef6c00,#ffa726)}
   @media(max-width:760px){.herorow{grid-template-columns:1fr}}
+  tr.anrow:hover{background:#f1f8f7}
+  #shipPanel{border-color:var(--accent);box-shadow:0 2px 10px rgba(239,108,0,.12)}
+  .axisbtns button{font-size:14px;padding:7px 16px}
 </style>
 </head>
 <body>
 
 <div id="login" class="card" style="display:none">
-  <h1>🎸 在庫管理 ログイン</h1>
+  <h1>📦 中古販売 ログイン</h1>
   <p>スタッフ用アカウントでログイン</p>
   <label>メールアドレス</label><input id="loginEmail" type="email" autocomplete="username">
   <label>パスワード</label><input id="loginPass" type="password" autocomplete="current-password">
@@ -85,12 +88,11 @@
 </div>
 
 <div id="app">
-<header><h1>🎸 中古楽器 在庫管理</h1><span class="sp"><span id="who" class="muted" style="color:#b2dfdb"></span><button onclick="doLogout()">ログアウト</button></span></header>
+<header><h1>📦 中古販売</h1><span class="sp"><span id="who" class="muted" style="color:#b2dfdb"></span><button onclick="doLogout()">ログアウト</button></span></header>
 <nav>
   <button data-v="dash" class="active">📊ダッシュボード</button>
   <button data-v="buy">🛒仕入れ管理</button>
-  <button data-v="manage">📋在庫管理</button>
-  <button data-v="ship">🚚発注/出荷管理</button>
+  <button data-v="manage">📋在庫/出荷管理</button>
   <button data-v="analysis">📈売上分析</button>
   <button data-v="log">📝ログ</button>
   <button data-v="settings">⚙️設定</button>
@@ -124,17 +126,9 @@
       <div class="catbtns"><button id="fbHome" onclick="toggleFlag('home',this)">🏠 自宅保管のみ</button><button id="fbChk" onclick="toggleFlag('chk',this)">📮 送料確認のみ</button></div>
       <label class="switch" style="margin-top:10px"><input type="checkbox" id="showImg" onchange="renderManage()"> 🖼 画像を表示する</label>
     </div>
-    <div id="manageList"><div class="loading">読み込み中…</div></div>
-    <input type="file" id="photoPicker" accept="image/*" style="display:none">
-    <div class="card"><div style="cursor:pointer" onclick="toggleLog('manage')"><b>📝 操作ログ（在庫の変更）</b> <span id="logcaret-manage">▼</span></div><div id="logbox-manage" style="display:none;margin-top:8px"></div></div>
-  </section>
-
-  <section id="v-ship" class="view">
-    <div class="card"><h2>🚚 発注/出荷管理</h2>
-      <label>在庫商品を検索</label><input id="shipSearch" oninput="renderShipList()" placeholder="ID・商品名・メーカー">
-      <div id="shipList" style="margin-top:10px"></div></div>
     <div class="card" id="shipPanel" style="display:none">
-      <h2>出荷内容の確認</h2><div id="shipSel"></div>
+      <h2 style="display:flex;align-items:center">🚚 出荷依頼<button class="btn ghost sm" style="margin-left:auto" onclick="closeShip()">× 閉じる</button></h2>
+      <div id="shipSel"></div>
       <div class="row" style="margin-top:10px">
         <div><label>販路</label><select id="shipChannel" onchange="shipChannelChange()"></select></div>
         <div><label>送料パターン</label><select id="shipPattern" onchange="shipPatternChange()"></select></div>
@@ -143,17 +137,34 @@
       </div>
       <div id="shipCalc" style="margin-top:8px"></div><div class="hr"></div>
       <button class="btn accent" id="shipGo" onclick="doShip()">✅ 在庫から差引 ＆ LINEを開く</button>
-      <div id="shipOut"></div></div>
+      <div id="shipOut"></div>
+    </div>
+    <div id="manageList"><div class="loading">読み込み中…</div></div>
+    <input type="file" id="photoPicker" accept="image/*" style="display:none">
+    <div class="card"><div style="cursor:pointer" onclick="toggleLog('manage')"><b>📝 操作ログ（在庫の変更）</b> <span id="logcaret-manage">▼</span></div><div id="logbox-manage" style="display:none;margin-top:8px"></div></div>
     <div class="card"><div style="cursor:pointer" onclick="toggleLog('ship')"><b>📝 操作ログ（出荷）</b> <span id="logcaret-ship">▼</span></div><div id="logbox-ship" style="display:none;margin-top:8px"></div></div>
   </section>
 
   <section id="v-analysis" class="view">
-    <div class="card"><div class="muted">期間を選択</div><div class="catbtns" id="anPeriodBtns"></div>
+    <div class="card">
+      <div class="muted">期間</div><div class="catbtns" id="anPeriodBtns"></div>
       <div class="row" style="align-items:flex-end;margin-top:8px">
         <div style="max-width:170px"><label>開始日</label><input type="date" id="anFrom"></div>
         <div style="max-width:170px"><label>終了日</label><input type="date" id="anTo"></div>
         <div style="flex:0"><button class="btn sm" onclick="applyAnalysisRange()">この期間で表示</button></div>
-      </div></div>
+      </div>
+      <div class="hr"></div>
+      <div class="muted">分析の軸（タップで切替）</div><div class="catbtns axisbtns" id="anAxisBtns"></div>
+      <div class="hr"></div>
+      <div class="muted">絞り込み</div>
+      <div class="row" style="align-items:flex-end">
+        <div><label>カテゴリ</label><select id="anCat" onchange="anFilterApply()"></select></div>
+        <div><label>小カテゴリ</label><select id="anSub" onchange="anFilterApply()"></select></div>
+        <div><label>担当者</label><select id="anStaff" onchange="anFilterApply()"></select></div>
+        <div><label>販路</label><select id="anCh" onchange="anFilterApply()"></select></div>
+        <div style="flex:0"><button class="btn ghost sm" onclick="clearAnFilter()">絞り込み解除</button></div>
+      </div>
+    </div>
     <div id="analysisBody"><div class="loading">読み込み中…</div></div>
   </section>
 
@@ -238,7 +249,7 @@ function doLogout(){ sb.auth.signOut(); CFG=null; STOCK=[]; }
 document.querySelectorAll('nav button').forEach(function(b){
   b.onclick=function(){document.querySelectorAll('nav button').forEach(function(x){x.classList.remove('active')});document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});
     b.classList.add('active');$('v-'+b.dataset.v).classList.add('active');var v=b.dataset.v;
-    if(v==='dash')renderDash(dashFromStock());if(v==='analysis')loadAnalysis();if(v==='log')loadLogs();if(v==='settings')renderSettings();if(v==='manage')renderManage();if(v==='ship')renderShipList();};
+    if(v==='dash')renderDash(dashFromStock());if(v==='analysis')loadAnalysis();if(v==='log')loadLogs();if(v==='settings')renderSettings();if(v==='manage'){renderManage();closeShip();}};
 });
 
 /* ====== データ読込（ログイン後に1回、全件を取得してメモリ保持） ====== */
@@ -435,6 +446,7 @@ function renderManage(){
     return '<div class="item" id="it-'+id+'">'
       +'<div class="ph" '+phS+' onclick="pickPhoto(\''+id+'\')">'+phI+'</div>'
       +'<div class="head" onclick="toggleItem(\''+id+'\')" style="flex:1;min-width:150px;cursor:pointer"><div class="nm" style="font-size:22px;font-weight:600;line-height:1.35"><span style="font-family:monospace;font-size:15px;color:var(--brand)">'+id+'</span><span style="font-size:14px;color:var(--sub);font-weight:600"> ・ '+(x.maker?esc(x.maker)+' ・ ':'')+'</span>'+esc(x.name)+'</div><div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="pill bigpill '+esc(x.status)+'">'+esc(x.status)+'</span>'+(per!=null?'<span style="background:'+bg+';color:'+fg+';padding:3px 10px;border-radius:10px;font-weight:800;white-space:nowrap">'+(x.status==='販売中'?'販売中 ':'')+per+'日</span>':'')+'</div></div>'
+      +(x.status!=='売却済み'?'<button class="btn accent sm" onclick="selShip(\''+id+'\')">🚚出荷依頼</button>':'')
       +'<button class="btn ghost sm" id="caret-'+id+'" onclick="toggleItem(\''+id+'\')">'+(openSet[x.id]?'▲':'▼')+'</button>'
       +'<div class="body" id="body-'+id+'" style="display:'+(openSet[x.id]?'block':'none')+';width:100%">'
         +'<div class="hr"></div>'
@@ -446,7 +458,7 @@ function renderManage(){
         +'<div class="ctrl" style="margin-top:8px"><div class="f"><label>ステータス</label><select class="e-status">'+opt(CFG.statuses,x.status)+'</select></div>'
           +'<div class="f"><label>送料パターン</label><select class="e-ship" onchange="recalc(\''+id+'\')">'+optPattern(x.shipPattern)+'</select></div>'+pin+'</div>'
         +'<div class="prof" id="prof-'+id+'" style="margin-top:8px"></div>'
-        +'<div style="margin-top:10px"><button class="btn ghost sm" onclick="toggleEdit(\''+id+'\')">✏️ 仕入れ情報を編集</button> <button class="btn sm" onclick="saveItem(\''+id+'\')">保存</button></div>'
+        +'<div style="margin-top:10px"><button class="btn ghost sm" onclick="toggleEdit(\''+id+'\')">✏️ 仕入れ情報を編集</button> <button class="btn sm" onclick="saveItem(\''+id+'\')">保存</button>'+(x.status!=='売却済み'?' <button class="btn accent sm" onclick="selShip(\''+id+'\')">🚚 出荷依頼する</button>':'')+'</div>'
         +'<div class="editfields" id="edit-'+id+'" style="display:none;margin-top:8px">'+editFields(x)+'</div>'
       +'</div></div>';
   }).join('');
@@ -510,7 +522,10 @@ function renderShipList(){var el=$('shipList');if(!el)return;var q=$('shipSearch
 function selShip(id){SEL.ship=STOCK.filter(function(x){return x.id===id;})[0];var x=SEL.ship;
   $('shipPanel').style.display='block';$('shipOut').innerHTML='';$('shipGo').disabled=false;$('shipGo').textContent='✅ 在庫から差引 ＆ LINEを開く';
   $('shipSel').innerHTML='<div class="row" style="align-items:center"><div style="flex:0">'+(x.photo?'<img class="thumb" src="'+esc(x.photo)+'">':'')+'</div><div><b>'+esc(x.id)+'</b> '+esc(x.maker)+' '+esc(x.name)+'<br><span class="muted">仕入 '+yen(x.cost)+'円'+(x.listDate?' ・ 販売日 '+esc(x.listDate):'')+'</span></div></div>';
-  $('shipPattern').value=x.shipPattern||'';shipPatternChange();shipChannelChange();$('shipPanel').scrollIntoView({behavior:'smooth'});}
+  $('shipPattern').value=x.shipPattern||'';
+  var chs=channelNames();for(var i=0;i<chs.length;i++){if(x.prices&&x.prices[chs[i]]){$('shipChannel').value=chs[i];break;}}
+  shipPatternChange();shipChannelChange();$('shipPanel').scrollIntoView({behavior:'smooth',block:'start'});}
+function closeShip(){var el=$('shipPanel');if(el)el.style.display='none';SEL.ship=null;}
 function shipPatternChange(){$('shipMethodAuto').value=patternMethod($('shipPattern').value)||'（未設定）';calcShip();}
 function shipChannelChange(){var x=SEL.ship;if(!x)return;var ch=$('shipChannel').value;$('shipPrice').value=(x.prices&&x.prices[ch])?x.prices[ch]:'';calcShip();}
 function calcShip(){var x=SEL.ship;if(!x)return;var ch=$('shipChannel').value,pat=$('shipPattern').value,price=Number($('shipPrice').value)||0,ship=patternFee(pat),p=calcProfit(price,x.cost,feeOf(ch),ship);
@@ -599,7 +614,7 @@ async function reloadCfgOnly(){
 }
 
 /* ====== JSON / CSV ====== */
-async function doExport(){toast('取得中…');var names=['items','categories','subcategories','category_fields','staff','channels','ship_methods','ship_patterns','statuses','op_conditions','period_colors','logs'];var out={version:'cloud1',exportedAt:new Date().toISOString()};for(var i=0;i<names.length;i++){var r=await sb.from(names[i]).select('*');out[names[i]]=r.data||[];}var blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='楽器在庫_backup_'+todayStr().replace(/\//g,'')+'.json';document.body.appendChild(a);a.click();setTimeout(function(){a.remove();},1000);toast('エクスポートしました');}
+async function doExport(){toast('取得中…');var names=['items','categories','subcategories','category_fields','staff','channels','ship_methods','ship_patterns','statuses','op_conditions','period_colors','logs'];var out={version:'cloud1',exportedAt:new Date().toISOString()};for(var i=0;i<names.length;i++){var r=await sb.from(names[i]).select('*');out[names[i]]=r.data||[];}var blob=new Blob([JSON.stringify(out,null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='中古販売_backup_'+todayStr().replace(/\//g,'')+'.json';document.body.appendChild(a);a.click();setTimeout(function(){a.remove();},1000);toast('エクスポートしました');}
 async function doImport(inp){var f=inp.files[0];if(!f)return;var txt=await f.text();var data;try{data=JSON.parse(txt);}catch(e){toast('JSON読込失敗');return;}if(!confirm('現在のデータを上書きします。よろしいですか？')){inp.value='';return;}toast('インポート中…');
   var settings=['categories','subcategories','category_fields','staff','channels','ship_methods','ship_patterns','statuses','op_conditions','period_colors'];
   if(data.items){await sb.from('items').delete().neq('id','__none__');if(data.items.length)await sb.from('items').insert(data.items);}
@@ -609,7 +624,7 @@ async function doImport(inp){var f=inp.files[0];if(!f)return;var txt=await f.tex
 function csvHeaders(){var base=['商品ID','カテゴリ','小カテゴリ','メーカー','商品名','状態','動作状態','付属品','仕入担当者','仕入価格','仕入日','ステータス','販売開始日','送料パターン'];var tail=['自宅保管','送料確認','販路','実売価格','実利益','出荷日','売却日','備考','写真URL'];return base.concat(channelNames().map(function(n){return '価格_'+n;})).concat(tail);}
 function downloadCsvTemplate(){var h=csvHeaders();var sample=h.map(function(x){switch(x){case 'カテゴリ':return 'エフェクター';case '小カテゴリ':return '歪み系';case 'メーカー':return 'BOSS';case '商品名':return 'DS-1 Distortion';case '状態':return '目立った傷や汚れなし';case '動作状態':return '完動品';case '付属品':return '箱の有無：箱あり';case '仕入担当者':return '担当A';case '仕入価格':return '4000';case '仕入日':return '2025/01/15';case 'ステータス':return '販売中';case '販売開始日':return '2025/02/01';case '送料パターン':return '宅急便80';default:return (x.indexOf('価格_')===0)?'8000':'';}});
   var csv=[h,sample].map(function(r){return r.map(function(c){c=String(c==null?'':c);if(/[",\n]/.test(c))c='"'+c.replace(/"/g,'""')+'"';return c;}).join(',');}).join('\r\n');
-  var blob=new Blob(['﻿'+csv],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='楽器在庫_CSV雛形.csv';document.body.appendChild(a);a.click();setTimeout(function(){a.remove();},1000);toast('雛形をダウンロードしました');}
+  var blob=new Blob(['﻿'+csv],{type:'text/csv'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='中古販売_CSV雛形.csv';document.body.appendChild(a);a.click();setTimeout(function(){a.remove();},1000);toast('雛形をダウンロードしました');}
 function parseCsv(text){text=String(text).replace(/^﻿/,'');var rows=[],row=[],cur='',inQ=false;for(var i=0;i<text.length;i++){var ch=text[i];if(inQ){if(ch==='"'){if(text[i+1]==='"'){cur+='"';i++;}else inQ=false;}else cur+=ch;}else{if(ch==='"')inQ=true;else if(ch===','){row.push(cur);cur='';}else if(ch==='\n'){row.push(cur);rows.push(row);row=[];cur='';}else if(ch==='\r'){}else cur+=ch;}}if(cur!==''||row.length){row.push(cur);rows.push(row);}return rows;}
 async function doCsvImport(inp){var f=inp.files[0];if(!f)return;if(!confirm('CSVを在庫に追加します。よろしいですか？')){inp.value='';return;}var txt=await f.text();var rows=parseCsv(txt);if(rows.length<2){toast('データなし');return;}toast('取込中…');
   var head=rows[0].map(function(s){return s.trim();}),idx={};head.forEach(function(h,i){idx[h]=i;});var pcs=head.filter(function(h){return h.indexOf('価格_')===0;}).map(function(h){return h.substring(3);});
@@ -760,7 +775,7 @@ function saveSet(table){
   state.settings[key]=vals;save();CFG=buildCFG();STOCK.forEach(computeProfits);fillSelectors();renderSettings();renderManage();renderShipList();renderDash(dashFromStock());toast('保存しました');}
 function reloadCfgOnly(){CFG=buildCFG();STOCK.forEach(computeProfits);fillSelectors();renderSettings();renderManage();renderShipList();renderDash(dashFromStock());}
 
-function doExport(){var blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='楽器在庫_backup_'+todayStr().replace(/\//g,'')+'.json';document.body.appendChild(a);a.click();setTimeout(function(){a.remove();},1000);toast('エクスポートしました');}
+function doExport(){var blob=new Blob([JSON.stringify(state,null,2)],{type:'application/json'});var a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='中古販売_backup_'+todayStr().replace(/\//g,'')+'.json';document.body.appendChild(a);a.click();setTimeout(function(){a.remove();},1000);toast('エクスポートしました');}
 function doImport(inp){var f=inp.files[0];if(!f)return;var r=new FileReader();r.onload=function(){var data;try{data=JSON.parse(r.result);}catch(e){toast('JSON読込失敗');return;}if(!confirm('現在のデータを上書きします。よろしいですか？')){inp.value='';return;}var keep={cloudUrl:state.cloudUrl,cloudSecret:state.cloudSecret,lineDirect:state.lineDirect};state=normalize(data);Object.assign(state,keep);localStorage.setItem(KEY,JSON.stringify(state));rebuildAll();renderDash(dashFromStock());if(CU())pushCloud();toast('インポートしました');};r.readAsText(f);inp.value='';}
 function readCsvFile(file){return new Promise(function(res){var r=new FileReader();r.onload=function(){var buf=r.result,txt;try{txt=new TextDecoder('utf-8',{fatal:false}).decode(buf);}catch(e){txt='';}if(txt.indexOf('カテゴリ')<0&&txt.indexOf('商品名')<0){try{txt=new TextDecoder('shift_jis').decode(buf);}catch(e2){}}res(txt.replace(/^﻿/,''));};r.readAsArrayBuffer(file);});}
 async function doCsvImport(inp){var f=inp.files[0];if(!f)return;if(!confirm('CSVを在庫に追加します。よろしいですか？')){inp.value='';return;}var text=await readCsvFile(f);var rows=parseCsv(text);if(rows.length<2){toast('データが読めませんでした（保存時に「CSV UTF-8」を選ぶと確実です）');return;}
@@ -813,17 +828,163 @@ function sortList(list){var m=document.getElementById('mSort'),v=m?m.value:'';if
   return list.slice().sort(function(a,b){var pa=salePeriod(a),pb=salePeriod(b);
     if(pa==null&&pb==null)return 0;if(pa==null)return 1;if(pb==null)return -1;
     return v==='pdesc'?(pb-pa):(pa-pb);});}
-var anFrom='',anTo='',anLabel='全期間';
+/* ====== 売上分析 v2（軸切替・絞り込み・ドリルダウン） ====== */
+var anFrom='',anTo='',anLabel='全期間',anPeriodKey='all',anAxis='month',anChart=null,AN_ROWS=[],anDetailOpen=false;
+var anF={cat:'',sub:'',staff:'',ch:''};
+var AN_AXES=[['month','📅 月ごとの推移'],['category','🗂 カテゴリごと'],['sub','📁 小カテゴリごと'],['staff','👤 担当者ごと'],['channel','🛒 販路ごと']];
 function fmtISO(d){var q=function(n){return ('0'+n).slice(-2);};return d.getFullYear()+'-'+q(d.getMonth()+1)+'-'+q(d.getDate());}
-function loadAnalysis(){buildAnPeriodBtns();var e1=document.getElementById('anFrom');if(e1)e1.value=anFrom;var e2=document.getElementById('anTo');if(e2)e2.value=anTo;var a=analysisFromStock(anFrom,anTo);a.label=anLabel;renderAnalysis(a);}
-function buildAnPeriodBtns(){var el=document.getElementById('anPeriodBtns');if(!el)return;var defs=[['all','全期間'],['ty','今年'],['tm','今月'],['lm','先月']];el.innerHTML=defs.map(function(d){return '<button class="'+(anLabel===d[1]||(d[0]==='all'&&anLabel==='全期間')?'active':'')+'" onclick="setAnPeriod(\''+d[0]+'\')">'+d[1]+'</button>';}).join('');}
-function setAnPeriod(k){var now=new Date(),y=now.getFullYear(),m=now.getMonth();
+function anAxisLabel(k){for(var i=0;i<AN_AXES.length;i++){if(AN_AXES[i][0]===k)return AN_AXES[i][1];}return '';}
+function allSubNames(){var a=[],m=(CFG&&CFG.subcategories)||{};Object.keys(m).forEach(function(k){(m[k]||[]).forEach(function(x){if(a.indexOf(x)<0)a.push(x);});});return a;}
+function monthLabel(k){var m=/^(\d{4})-(\d{2})$/.exec(k);return m?(m[1]+'/'+m[2]):k;}
+
+function anItems(){
+  var f=anFrom?new Date(anFrom+'T00:00:00'):null,t=anTo?new Date(anTo+'T23:59:59'):null;
+  return STOCK.filter(function(x){
+    if(x.status!=='売却済み')return false;
+    if(f||t){var d=parseD(x.saleDate);if(!d)return false;if(f&&d<f)return false;if(t&&d>t)return false;}
+    if(anF.cat&&x.category!==anF.cat)return false;
+    if(anF.sub&&(x.subCategory||'')!==anF.sub)return false;
+    if(anF.staff&&(x.staff||'')!==anF.staff)return false;
+    if(anF.ch&&(x.channel||'')!==anF.ch)return false;
+    return true;});
+}
+function anKeyOf(x,axis){
+  if(axis==='month')return (x.saleDate&&String(x.saleDate).length>=7)?String(x.saleDate).substring(0,7).replace(/\//g,'-'):'(未設定)';
+  if(axis==='category')return x.category||'(未設定)';
+  if(axis==='sub')return x.subCategory||'(未設定)';
+  if(axis==='staff')return x.staff||'(未設定)';
+  return x.channel||'(未設定)';
+}
+function anGroup(items,axis){
+  var m={};
+  items.forEach(function(x){var k=anKeyOf(x,axis),g=m[k]||(m[k]={key:k,count:0,revenue:0,cost:0,profit:0,ds:0,dn:0});
+    g.count++;g.revenue+=Number(x.salePrice)||0;g.cost+=Number(x.cost)||0;g.profit+=Number(x.profit)||0;
+    var p=salePeriod(x);if(p!=null){g.ds+=p;g.dn++;}});
+  var arr=Object.keys(m).map(function(k){var o=m[k];
+    o.rate=o.revenue>0?Math.round(o.profit/o.revenue*1000)/10:0;
+    o.avgProfit=o.count?Math.round(o.profit/o.count):0;
+    o.avgDays=o.dn?Math.round(o.ds/o.dn):null;o.diff=null;return o;});
+  if(axis==='month'){arr.sort(function(a,b){return a.key<b.key?-1:(a.key>b.key?1:0);});
+    for(var i=1;i<arr.length;i++)arr[i].diff=arr[i].profit-arr[i-1].profit;}
+  else arr.sort(function(a,b){return b.profit-a.profit;});
+  return arr;
+}
+
+function buildAnPeriodBtns(){var el=$('anPeriodBtns');if(!el)return;
+  var defs=[['all','全期間'],['ty','今年'],['ly','昨年'],['tm','今月'],['lm','先月'],['3m','直近3ヶ月']];
+  el.innerHTML=defs.map(function(d){return '<button class="'+(anPeriodKey===d[0]?'active':'')+'" onclick="setAnPeriod(\''+d[0]+'\')">'+d[1]+'</button>';}).join('');}
+function setAnPeriod(k){var now=new Date(),y=now.getFullYear(),m=now.getMonth();anPeriodKey=k;
   if(k==='all'){anFrom='';anTo='';anLabel='全期間';}
   else if(k==='ty'){anFrom=fmtISO(new Date(y,0,1));anTo=fmtISO(new Date(y,11,31));anLabel=y+'年';}
+  else if(k==='ly'){anFrom=fmtISO(new Date(y-1,0,1));anTo=fmtISO(new Date(y-1,11,31));anLabel=(y-1)+'年';}
   else if(k==='tm'){anFrom=fmtISO(new Date(y,m,1));anTo=fmtISO(new Date(y,m+1,0));anLabel=y+'年'+(m+1)+'月';}
   else if(k==='lm'){var lm=new Date(y,m-1,1);anFrom=fmtISO(lm);anTo=fmtISO(new Date(y,m,0));anLabel=lm.getFullYear()+'年'+(lm.getMonth()+1)+'月';}
+  else if(k==='3m'){anFrom=fmtISO(new Date(y,m-2,1));anTo=fmtISO(new Date(y,m+1,0));anLabel='直近3ヶ月';}
   loadAnalysis();}
-function applyAnalysisRange(){anFrom=document.getElementById('anFrom').value;anTo=document.getElementById('anTo').value;anLabel=(anFrom||'最初')+' 〜 '+(anTo||'最新');loadAnalysis();}
+function applyAnalysisRange(){anFrom=$('anFrom').value;anTo=$('anTo').value;anPeriodKey='';anLabel=(anFrom||'最初')+' 〜 '+(anTo||'最新');loadAnalysis();}
+
+function buildAnAxisBtns(){var el=$('anAxisBtns');if(!el)return;
+  el.innerHTML=AN_AXES.map(function(a){return '<button class="'+(anAxis===a[0]?'active':'')+'" onclick="setAnAxis(\''+a[0]+'\')">'+a[1]+'</button>';}).join('');}
+function setAnAxis(k){anAxis=k;loadAnalysis();}
+
+function buildAnFilters(){var c=$('anCat');if(!c||!CFG)return;
+  c.innerHTML='<option value="">すべて</option>'+opt(catNames(),anF.cat);c.value=anF.cat;
+  var subs=anF.cat?(CFG.subcategories[anF.cat]||[]):allSubNames();
+  if(anF.sub&&subs.indexOf(anF.sub)<0)anF.sub='';
+  $('anSub').innerHTML='<option value="">すべて</option>'+opt(subs,anF.sub);$('anSub').value=anF.sub;
+  $('anStaff').innerHTML='<option value="">すべて</option>'+opt(CFG.staff,anF.staff);$('anStaff').value=anF.staff;
+  $('anCh').innerHTML='<option value="">すべて</option>'+opt(channelNames(),anF.ch);$('anCh').value=anF.ch;}
+function anFilterApply(){anF.cat=$('anCat').value;anF.sub=$('anSub').value;anF.staff=$('anStaff').value;anF.ch=$('anCh').value;loadAnalysis();}
+function clearAnFilter(){anF={cat:'',sub:'',staff:'',ch:''};loadAnalysis();}
+function anDrill(i){var o=AN_ROWS[i];if(!o)return;var k=(o.key==='(未設定)')?'':o.key;
+  if(anAxis==='category'){anF.cat=k;anF.sub='';anAxis='sub';}
+  else if(anAxis==='sub'){anF.sub=k;anAxis='month';}
+  else if(anAxis==='staff'){anF.staff=k;anAxis='month';}
+  else if(anAxis==='channel'){anF.ch=k;anAxis='month';}
+  loadAnalysis();}
+
+function loadAnalysis(){
+  if(!CFG||!$('analysisBody'))return;
+  buildAnPeriodBtns();buildAnAxisBtns();buildAnFilters();
+  var e1=$('anFrom');if(e1)e1.value=anFrom;var e2=$('anTo');if(e2)e2.value=anTo;
+  var items=anItems();AN_ROWS=anGroup(items,anAxis);
+  var tr=0,tp=0,tc=0,dsum=0,dn=0;
+  items.forEach(function(x){tr+=Number(x.salePrice)||0;tp+=Number(x.profit)||0;tc+=Number(x.cost)||0;var p=salePeriod(x);if(p!=null){dsum+=p;dn++;}});
+  var rate=tr>0?Math.round(tp/tr*1000)/10:0;
+  var fl=[];if(anF.cat)fl.push(anF.cat);if(anF.sub)fl.push(anF.sub);if(anF.staff)fl.push('担当 '+anF.staff);if(anF.ch)fl.push(anF.ch);
+  var h=(anAxis==='month')?260:Math.max(200,AN_ROWS.length*38+70);
+  var html='<div class="hero"><div class="l">'+esc(anLabel)+(fl.length?'　【'+esc(fl.join(' / '))+'】':'')+' の利益（売却済み）</div><div class="n">'+yen(tp)+' 円</div><div class="s">'+items.length+'点 ・ 売上 '+yen(tr)+'円 ・ 利益率 '+rate+'%</div></div>'
+   +'<div class="kpis small">'
+   +'<div class="kpi sm"><div class="n">'+items.length+'点</div><div class="l">売却点数</div></div>'
+   +'<div class="kpi sm blue"><div class="n">'+yen(tr)+'円</div><div class="l">売上</div></div>'
+   +'<div class="kpi sm"><div class="n">'+yen(tc)+'円</div><div class="l">仕入原価</div></div>'
+   +'<div class="kpi sm green"><div class="n">'+yen(items.length?Math.round(tp/items.length):0)+'円</div><div class="l">1点あたり平均利益</div></div>'
+   +'<div class="kpi sm orange"><div class="n">'+(dn?Math.round(dsum/dn)+'日':'—')+'</div><div class="l">平均販売日数</div></div>'
+   +'</div>'
+   +'<div class="card" style="margin-top:12px"><h3>'+esc(anAxisLabel(anAxis))+'</h3>'
+   +(AN_ROWS.length?'<div style="height:'+h+'px"><canvas id="anChart"></canvas></div>':'<div class="loading">この条件のデータはありません</div>')
+   +'</div>'
+   +anTable(AN_ROWS)
+   +'<div class="card"><div style="cursor:pointer" onclick="toggleAnDetail()"><b>📄 売却明細（'+items.length+'件）</b> <span>'+(anDetailOpen?'▲':'▼')+'</span></div>'
+   +'<div style="display:'+(anDetailOpen?'block':'none')+';margin-top:8px;overflow-x:auto">'+(anDetailOpen?anDetailTable(items):'')+'</div></div>';
+  $('analysisBody').innerHTML=html;
+  drawAnChart(AN_ROWS);
+}
+function anTable(rows){
+  if(!rows.length)return '';
+  var isM=(anAxis==='month');
+  var head='<tr><th>'+(isM?'月':'区分')+'</th><th>件数</th><th>売上</th><th>利益</th><th>利益率</th><th>平均利益</th><th>平均日数</th>'+(isM?'<th>前月比(利益)</th>':'')+'</tr>';
+  var tc=0,tr2=0,tp=0;
+  var body=rows.map(function(o,i){tc+=o.count;tr2+=o.revenue;tp+=o.profit;
+    var attr=isM?'':' class="anrow" style="cursor:pointer" onclick="anDrill('+i+')"';
+    var diff=isM?('<td>'+(o.diff==null?'—':(o.diff>=0?'<span class="pos">+'+yen(o.diff)+'</span>':'<span class="neg">'+yen(o.diff)+'</span>'))+'</td>'):'';
+    return '<tr'+attr+'><td>'+esc(isM?monthLabel(o.key):o.key)+'</td><td>'+o.count+'</td><td>'+yen(o.revenue)+'</td><td>'+profitHtml(o.profit)+'</td><td>'+o.rate+'%</td><td>'+yen(o.avgProfit)+'</td><td>'+(o.avgDays==null?'—':o.avgDays+'日')+'</td>'+diff+'</tr>';}).join('');
+  var trate=tr2>0?Math.round(tp/tr2*1000)/10:0;
+  var foot='<tr style="background:#f7f9fa;font-weight:700"><td>合計</td><td>'+tc+'</td><td>'+yen(tr2)+'</td><td>'+profitHtml(tp)+'</td><td>'+trate+'%</td><td>'+yen(tc?Math.round(tp/tc):0)+'</td><td>—</td>'+(isM?'<td>—</td>':'')+'</tr>';
+  return '<div class="card"><h3>'+esc(anAxisLabel(anAxis))+' の内訳</h3>'
+    +(isM?'<p class="muted">売却日を基準に集計しています。</p>':'<p class="muted">行をタップすると、その区分でさらに詳しく見られます。</p>')
+    +'<div style="overflow-x:auto"><table>'+head+body+foot+'</table></div>'
+    +'<div style="margin-top:10px"><button class="btn ghost sm" onclick="anCsv()">⬇ この表をCSVで保存</button></div></div>';
+}
+function drawAnChart(rows){
+  var cv=$('anChart');if(!cv||typeof Chart==='undefined'||!rows.length)return;
+  if(anChart){anChart.destroy();anChart=null;}
+  var labels=rows.map(function(o){return anAxis==='month'?monthLabel(o.key):o.key;});
+  var rev=rows.map(function(o){return o.revenue;}),pro=rows.map(function(o){return o.profit;});
+  var base={responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'},tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+yen(c.raw)+'円';}}}}};
+  if(anAxis==='month'){
+    base.scales={y:{ticks:{callback:function(v){return yen(v);}}}};
+    anChart=new Chart(cv,{data:{labels:labels,datasets:[
+      {type:'bar',label:'売上',data:rev,backgroundColor:'#b2dfdb',order:2},
+      {type:'line',label:'利益',data:pro,borderColor:'#00695c',backgroundColor:'#00695c',tension:.3,fill:false,pointRadius:4,order:1}]},options:base});
+  }else{
+    base.indexAxis='y';base.scales={x:{ticks:{callback:function(v){return yen(v);}}}};
+    anChart=new Chart(cv,{type:'bar',data:{labels:labels,datasets:[
+      {label:'利益',data:pro,backgroundColor:'#26a69a'},
+      {label:'売上',data:rev,backgroundColor:'#cfd8dc'}]},options:base});
+  }
+}
+function toggleAnDetail(){anDetailOpen=!anDetailOpen;loadAnalysis();}
+function anDetailTable(items){
+  var list=items.slice().sort(function(a,b){var x=String(a.saleDate||''),y=String(b.saleDate||'');return x<y?1:(x>y?-1:0);}).slice(0,300);
+  var rows=list.map(function(x){var p=salePeriod(x);
+    return '<tr><td>'+esc(x.saleDate||'')+'</td><td style="font-family:monospace">'+esc(x.id)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.category||'')+(x.subCategory?' / '+esc(x.subCategory):'')+'</td><td>'+esc(x.staff||'')+'</td><td>'+esc(x.channel||'')+'</td><td>'+yen(x.cost)+'</td><td>'+yen(x.salePrice)+'</td><td>'+profitHtml(x.profit)+'</td><td>'+(p==null?'—':p+'日')+'</td></tr>';}).join('')||'<tr><td colspan="10" class="muted">データなし</td></tr>';
+  return '<table><tr><th>売却日</th><th>ID</th><th>商品名</th><th>カテゴリ</th><th>担当</th><th>販路</th><th>仕入</th><th>売価</th><th>利益</th><th>販売日数</th></tr>'+rows+'</table>'
+    +(items.length>300?'<p class="muted">最新300件のみ表示しています（CSVは全件）。</p>':'')
+    +'<div style="margin-top:10px"><button class="btn ghost sm" onclick="anDetailCsv()">⬇ 明細をCSVで保存</button></div>';
+}
+function dlCsv(name,rows){
+  var csv=rows.map(function(r){return r.map(function(c){var t=String(c==null?'':c);return /[",\n]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t;}).join(',');}).join('\r\n');
+  var blob=new Blob(['﻿'+csv],{type:'text/csv'});var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(function(){a.remove();},1000);}
+function anCsv(){var isM=(anAxis==='month');
+  var out=[[isM?'月':'区分','件数','売上','利益','利益率(%)','平均利益','平均販売日数']];
+  AN_ROWS.forEach(function(o){out.push([isM?monthLabel(o.key):o.key,o.count,o.revenue,o.profit,o.rate,o.avgProfit,o.avgDays==null?'':o.avgDays]);});
+  dlCsv('売上分析_'+anAxis+'_'+todayStr().replace(/\//g,'')+'.csv',out);}
+function anDetailCsv(){
+  var out=[['売却日','商品ID','商品名','カテゴリ','小カテゴリ','担当者','販路','仕入価格','売却価格','利益','販売日数']];
+  anItems().forEach(function(x){var p=salePeriod(x);out.push([x.saleDate||'',x.id,x.name,x.category||'',x.subCategory||'',x.staff||'',x.channel||'',x.cost||0,x.salePrice||0,x.profit||0,p==null?'':p]);});
+  dlCsv('売却明細_'+todayStr().replace(/\//g,'')+'.csv',out);}
 function resetAll(){if(!confirm('在庫・仕入れ・発注/出荷・ログのデータを消去します。設定（カテゴリ・販路・送料など）は残ります。よろしいですか？（元に戻せません）'))return;if(!confirm('最終確認：本当に在庫・出荷などのデータを消去しますか？'))return;var keepSettings=state.settings,keepCloud={cloudUrl:state.cloudUrl,cloudSecret:state.cloudSecret,lineDirect:state.lineDirect};state=defaultState();state.settings=keepSettings;Object.assign(state,keepCloud);localStorage.setItem(KEY,JSON.stringify(state));rebuildAll();renderDash(dashFromStock());if(CU())pushCloud();toast('在庫・出荷データを初期化しました（設定は保持）');}
 initApp();
 
