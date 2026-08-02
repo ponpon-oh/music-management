@@ -445,7 +445,7 @@ function renderManage(){
     var pin=CFG.channels.map(function(c){var n=c['販路名'];return '<div class="f pf"><label>'+esc(n)+'価格</label><input type="number" inputmode="numeric" class="e-price" data-ch="'+esc(n)+'" value="'+(x.prices[n]||'')+'" oninput="recalc(\''+id+'\')"></div>';}).join('');
     return '<div class="item" id="it-'+id+'">'
       +'<div class="ph" '+phS+' onclick="pickPhoto(\''+id+'\')">'+phI+'</div>'
-      +'<div class="head" onclick="toggleItem(\''+id+'\')" style="flex:1;min-width:150px;cursor:pointer"><div class="nm" style="font-size:22px;font-weight:600;line-height:1.35"><span style="font-family:monospace;font-size:15px;color:var(--brand)">'+id+'</span><span style="font-size:14px;color:var(--sub);font-weight:600"> ・ '+(x.maker?esc(x.maker)+' ・ ':'')+'</span>'+esc(x.name)+'</div><div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="pill bigpill '+esc(x.status)+'">'+esc(x.status)+'</span>'+(per!=null?'<span style="background:'+bg+';color:'+fg+';padding:3px 10px;border-radius:10px;font-weight:800;white-space:nowrap">'+(x.status==='販売中'?'販売中 ':'')+per+'日</span>':'')+'</div></div>'
+      +'<div class="head" onclick="toggleItem(\''+id+'\')" style="flex:1;min-width:150px;cursor:pointer"><div class="nm" style="font-size:22px;font-weight:600;line-height:1.35"><span style="font-family:monospace;font-size:15px;color:var(--brand)">'+id+'</span><span style="font-size:14px;color:var(--sub);font-weight:600"> ・ '+(x.maker?esc(x.maker)+' ':'')+'</span>'+esc(x.name)+'</div><div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="pill bigpill '+esc(x.status)+'">'+esc(x.status)+'</span>'+(per!=null?'<span style="background:'+bg+';color:'+fg+';padding:3px 10px;border-radius:10px;font-weight:800;white-space:nowrap">'+(x.status==='販売中'?'販売中 ':'')+per+'日</span>':'')+'</div></div>'
       +(x.status!=='売却済み'?'<button class="btn accent sm" onclick="selShip(\''+id+'\')">🚚出荷依頼</button>':'')
       +'<button class="btn ghost sm" id="caret-'+id+'" onclick="toggleItem(\''+id+'\')">'+(openSet[x.id]?'▲':'▼')+'</button>'
       +'<div class="body" id="body-'+id+'" style="display:'+(openSet[x.id]?'block':'none')+';width:100%">'
@@ -569,12 +569,13 @@ function renderSettings(){
   $('setCh').innerHTML=CFG.channels.map(function(c){return setRow('ch',c['販路名'],c['手数料率(%)']);}).join('');
   $('setMethod').innerHTML=methodNames().map(function(m){return setRow('method',m);}).join('');
   $('setPattern').innerHTML=CFG.shipPatterns.map(function(p){return setRow('pattern',p.name,p.amount,p.method);}).join('');
-  $('setOpcond').innerHTML=CFG.opConditions.map(function(s){return setRow('opcond',s);}).join('');
+  $('setOpcond').innerHTML=CFG.opConditions.map(function(s){return setRow('opcond',s,(CFG.opNoteTargets||[]).indexOf(s)>=0);}).join('');
   $('setStatus').innerHTML=CFG.statuses.map(function(s){return setRow('status',s);}).join('');
   $('setPColor').innerHTML=CFG.periodColors.map(function(r){return setRow('pcolor',r.min,(r.max===99999?'':r.max),r.color);}).join('');
 }
 function setRow(kind,a,b,c){var del='<button class="btn danger sm" onclick="this.parentNode.remove()">×</button>';
-  if(kind==='staff'||kind==='method'||kind==='opcond'||kind==='status')return '<div class="setrow"><input placeholder="名前" value="'+esc(a||'')+'">'+del+'</div>';
+  if(kind==='opcond')return '<div class="setrow"><input placeholder="名前" value="'+esc(a||'')+'"><label class="switch" style="flex:0 0 auto;white-space:nowrap"><input type="checkbox" class="op-note"'+(b?' checked':'')+'> 備考へ転記</label>'+del+'</div>';
+  if(kind==='staff'||kind==='method'||kind==='status')return '<div class="setrow"><input placeholder="名前" value="'+esc(a||'')+'">'+del+'</div>';
   if(kind==='subcat')return '<div class="setrow"><select style="max-width:170px">'+opt(catNames(),a)+'</select><input placeholder="小カテゴリ名" value="'+esc(b||'')+'">'+del+'</div>';
   if(kind==='catfield')return '<div class="setrow"><input placeholder="カテゴリ名" value="'+esc(a||'')+'" style="max-width:150px"><input placeholder="項目名" value="'+esc(b||'')+'" style="max-width:150px"><input placeholder="選択肢(カンマ)" value="'+esc(c||'')+'">'+del+'</div>';
   if(kind==='pattern')return '<div class="setrow"><input placeholder="パターン名" value="'+esc(a||'')+'"><input type="number" placeholder="金額" value="'+esc(b==null?'':b)+'" style="max-width:100px"><select style="max-width:150px">'+opt(methodNames(),c)+'</select>'+del+'</div>';
@@ -656,6 +657,7 @@ function defaultState(){return {rev:0,logSeq:0,counters:{},items:[],logs:[],clou
   shipPatterns:[{name:'ネコポス',amount:385,method:'コンパクト'},{name:'宅急便コンパクト',amount:450,method:'コンパクト'},{name:'ゆうパケットプラス',amount:520,method:'ゆうパケットプラス'},{name:'宅急便60',amount:700,method:'宅急便'},{name:'宅急便80',amount:900,method:'宅急便'},{name:'宅急便100',amount:1100,method:'宅急便'},{name:'ゆうパック80',amount:900,method:'ゆうパック'},{name:'ゆうパック100',amount:1100,method:'ゆうパック'}],
   statuses:['未販売','販売中','ステイ','要：修理','要：確認','売却済み'],
   opConditions:['完動品','要：整備'],
+  opNoteTargets:['要：整備'],
   periodColors:[{min:0,max:30,color:'赤'},{min:31,max:60,color:'橙'},{min:61,max:90,color:'黄'},{min:91,max:3650,color:'グレー'}]
 }};}
 function normalize(o){var d=defaultState();o=o||{};o.settings=Object.assign({},d.settings,o.settings||{});['items','logs'].forEach(function(k){if(!Array.isArray(o[k]))o[k]=d[k];});o.counters=o.counters||{};o.logSeq=o.logSeq||0;o.rev=o.rev||0;o.cloudUrl=o.cloudUrl||'';o.cloudSecret=o.cloudSecret||'';o.lineDirect=!!o.lineDirect;Object.keys(d.settings).forEach(function(k){if(!Array.isArray(o.settings[k]))o.settings[k]=d.settings[k];});return o;}
@@ -668,7 +670,7 @@ function buildCFG(){var s=state.settings;var subs={};s.subcategories.forEach(fun
   var fields={};s.categoryFields.forEach(function(x){(fields[x.category]=fields[x.category]||[]).push({label:x.label,options:String(x.options||'').split(',').map(function(t){return t.trim();}).filter(Boolean)});});
   return {categories:s.categories.map(function(c){return {'カテゴリ名':c.name,'IDプレフィックス':c.prefix};}),subcategories:subs,categoryFields:fields,staff:s.staff.slice(),
     channels:s.channels.map(function(c){return {'販路名':c.name,'手数料率(%)':Number(c.fee)};}),shipMethodNames:s.shipMethods.slice(),
-    shipPatterns:s.shipPatterns.map(function(p){return {name:p.name,amount:Number(p.amount)||0,method:p.method};}),statuses:s.statuses.slice(),opConditions:s.opConditions.slice(),
+    shipPatterns:s.shipPatterns.map(function(p){return {name:p.name,amount:Number(p.amount)||0,method:p.method};}),statuses:s.statuses.slice(),opConditions:s.opConditions.slice(),opNoteTargets:(s.opNoteTargets||[]).slice(),
     periodColors:s.periodColors.map(function(r){return {min:Number(r.min)||0,max:(r.max==null||r.max===''?99999:Number(r.max)),color:r.color};}),conditions:CONDITIONS};}
 function rebuildAll(){CFG=buildCFG();STOCK=state.items;STOCK.forEach(computeProfits);fillSelectors();renderManage();renderShipList();renderDash(dashFromStock());if(document.getElementById('v-settings').classList.contains('active'))renderSettings();refreshOpenLogs();}
 function nextId(prefix){var mx=state.counters[prefix]||0;var re=new RegExp('^'+prefix+'(\\d+)$');state.items.forEach(function(x){var m=re.exec(x.id);if(m)mx=Math.max(mx,parseInt(m[1],10));});var n=mx+1;state.counters[prefix]=n;return prefix+('0000'+n).slice(-4);}
@@ -704,12 +706,13 @@ function doLogout(){toast('データはこの端末＋（設定時）クラウ�
 function directImg(u){if(!u||!/^https?:/.test(u))return '';var m=/[?&]id=([^&]+)/.exec(u)||/\/d\/([^/=?]+)/.exec(u);return m?('https://lh3.googleusercontent.com/d/'+m[1]+'=w1024'):u;}
 function lineUrl(msg,photo){var img=directImg(photo);var t=msg+(img?('\n商品写真：'+img):'');return 'https://line.me/R/share?text='+encodeURIComponent(t);}
 
+function noteFromOp(op){var t=(CFG&&CFG.opNoteTargets)||[];return (op&&t.indexOf(op)>=0)?op:'';}
 function submitPurchase(){
   var rows=document.querySelectorAll('#buyRows .purchase-row'),items=[];
   rows.forEach(function(r){var name=r.querySelector('.b-name').value.trim();if(!name)return;var acc=[];r.querySelectorAll('.cf-field select').forEach(function(s){if(s.value)acc.push(s.dataset.label+'：'+s.value);});var ss=r.querySelector('.b-sub');
     items.push({category:r.querySelector('.b-cat').value,subCategory:(r.querySelector('.sub-wrap').style.display!=='none'&&ss)?ss.value:'',maker:r.querySelector('.b-maker').value.trim(),name:name,cost:Number(r.querySelector('.b-cost').value)||0,condition:r.querySelector('.b-cond').value,opCondition:r.querySelector('.b-op').value,staff:r.querySelector('.b-staff').value,accessory:acc.join(' ・ ')});});
   if(!items.length){toast('商品名を入力してください');return;}var created=[];
-  items.forEach(function(it){var id=nextId(prefixOf(it.category));var o={id:id,category:it.category,subCategory:it.subCategory,maker:it.maker,name:it.name,condition:it.condition,opCondition:it.opCondition,accessory:it.accessory,staff:it.staff,cost:it.cost,buyDate:todayStr(),photo:'',status:'未販売',listDate:'',shipPattern:'',prices:{},home:false,shipCheck:false,channel:'',salePrice:'',profit:'',shipDate:'',saleDate:'',note:''};computeProfits(o);state.items.push(o);logAction('仕入れ',id,it.name,(it.maker||'')+' / 仕入 '+it.cost+'円'+(it.staff?' / '+it.staff:''),null);created.push(o);});
+  items.forEach(function(it){var id=nextId(prefixOf(it.category));var o={id:id,category:it.category,subCategory:it.subCategory,maker:it.maker,name:it.name,condition:it.condition,opCondition:it.opCondition,accessory:it.accessory,staff:it.staff,cost:it.cost,buyDate:todayStr(),photo:'',status:'未販売',listDate:'',shipPattern:'',prices:{},home:false,shipCheck:false,channel:'',salePrice:'',profit:'',shipDate:'',saleDate:'',note:noteFromOp(it.opCondition)};computeProfits(o);state.items.push(o);logAction('仕入れ',id,it.name,(it.maker||'')+' / 仕入 '+it.cost+'円'+(it.staff?' / '+it.staff:''),null);created.push(o);});
   STOCK=state.items;save();
   document.getElementById('buyResult').innerHTML='<div class="hr"></div><div class="msgbox"><b>登録しました（'+created.length+'点）</b><br>'+created.map(function(c){return c.id+' … '+esc(c.maker)+' '+esc(c.name);}).join('<br>')+'</div>';
   initBuy();renderManage();renderShipList();renderDash(dashFromStock());refreshOpenLogs();toast('仕入れを登録しました');}
@@ -759,6 +762,13 @@ function undo(logId){if(!confirm('この操作を取り消し（削除）しま�
   g.state='取消済';save();renderManage();renderShipList();renderDash(dashFromStock());loadLogs();refreshOpenLogs();toast('取り消しました');}
 
 function saveSet(table){
+  if(table==='op_conditions'){
+    var orows=document.querySelectorAll('#setOpcond .setrow'),names=[],tgs=[];
+    orows.forEach(function(r){var ins=r.querySelectorAll('input'),n=ins[0].value.trim();if(!n)return;names.push(n);
+      var cb=r.querySelector('.op-note');if(cb&&cb.checked)tgs.push(n);});
+    state.settings.opConditions=names;state.settings.opNoteTargets=tgs;save();
+    CFG=buildCFG();STOCK.forEach(computeProfits);fillSelectors();renderSettings();renderManage();renderDash(dashFromStock());toast('保存しました');return;
+  }
   var conf={categories:['setCat',function(i,s){return {name:i[0].value.trim(),prefix:i[1].value.trim()};}],
     subcategories:['setSub',function(i,s){return {parent:s[0]?s[0].value:'',name:i[0].value.trim()};}],
     category_fields:['setCatField',function(i,s){return {category:i[0].value.trim(),label:i[1].value.trim(),options:i[2].value.trim()};}],
