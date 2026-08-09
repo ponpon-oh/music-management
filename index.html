@@ -90,17 +90,13 @@
 <div id="app">
 <header><h1>📦 中古販売</h1><span class="sp"><span id="who" class="muted" style="color:#b2dfdb"></span><button onclick="doLogout()">ログアウト</button></span></header>
 <nav>
-  <button data-v="dash" class="active">📊ダッシュボード</button>
-  <button data-v="buy">🛒仕入れ管理</button>
+  <button data-v="buy" class="active">🛒仕入れ管理</button>
   <button data-v="manage">📋在庫/出荷管理</button>
   <button data-v="analysis">📈売上分析</button>
-  <button data-v="log">📝ログ</button>
   <button data-v="settings">⚙️設定</button>
 </nav>
 <main>
-  <section id="v-dash" class="view active"><div id="dashBody"><div class="loading">読み込み中…</div></div></section>
-
-  <section id="v-buy" class="view">
+  <section id="v-buy" class="view active">
     <div class="card"><h2>🛒 仕入れ管理</h2>
       <p class="muted">複数まとめて登録できます。IDは重複しない自動採番。写真は登録後、在庫管理から追加。</p>
       <div id="buyRows"></div>
@@ -119,7 +115,9 @@
         <div style="max-width:100px"><label>期間 最小(日)</label><input type="number" id="pMin" oninput="renderManage()"></div>
         <div style="max-width:100px"><label>最大(日)</label><input type="number" id="pMax" oninput="renderManage()"></div>
         <div style="flex:0"><button class="btn ghost sm" onclick="reloadData()">更新</button></div>
+        <div style="flex:0"><button class="btn ghost sm" onclick="toggleManualAdd()">＋ 手動で在庫を登録</button></div>
       </div>
+      <div id="manualAddBox" style="display:none;margin-top:10px"></div>
       <div class="catbtns" id="catBtns"></div>
       <div class="muted" style="margin-top:8px">ステータス（複数選択できます／OR検索）</div>
       <div class="catbtns" id="statusBtns"></div>
@@ -159,6 +157,7 @@
   </section>
 
   <section id="v-analysis" class="view">
+    <div id="anKpis"></div>
     <div class="card">
       <div class="muted">期間</div><div class="catbtns" id="anPeriodBtns"></div>
       <div class="row" style="align-items:flex-end;margin-top:8px">
@@ -181,23 +180,13 @@
     <div id="analysisBody"><div class="loading">読み込み中…</div></div>
   </section>
 
-  <section id="v-log" class="view"><div class="card"><h2>📝 操作ログ（全体）</h2><button class="btn ghost sm" onclick="loadLogs()">更新</button><div id="logBody" style="margin-top:10px"></div></div></section>
-
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-09i</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-09k</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
       <label>合言葉（SECRET）</label><input id="cloudSecretInput" placeholder="Code.gsのSECRETと同じ">
       <div style="margin-top:8px"><button class="btn sm" onclick="saveCloudSettings()">接続して保存</button> <button class="btn ghost sm" onclick="testCloud()">接続テスト</button> <span id="cloudStatus" class="muted"></span></div></div>
-    <div class="card"><h2>バックアップ / 取り込み</h2>
-      <button class="btn sm" onclick="doExport()">⬇ JSONエクスポート</button>
-      <button class="btn ghost sm" onclick="document.getElementById('importFile').click()">⬆ JSONインポート</button>
-      <input type="file" id="importFile" accept=".json" style="display:none" onchange="doImport(this)">
-      <div class="hr"></div>
-      <button class="btn sm" onclick="downloadCsvTemplate()">⬇ CSV雛形</button>
-      <button class="btn ghost sm" onclick="document.getElementById('csvFile').click()">⬆ CSVインポート</button>
-      <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="doCsvImport(this)"></div>
     <div class="card"><h2>🔗 出品URLの取り込み</h2>
       <p class="muted">タブ区切りで1行ずつ貼り付けて「照合する」。<b>在庫IDを含めれば確実にその商品に結びつきます</b>（例：<code>B011　Yahoo!フリマ　https://…</code>）。IDがない場合は出品タイトルから自動照合します。URLの代わりに <code>-</code> と書くと「出品なし」として記録します。</p>
       <textarea id="lstPaste" rows="6" placeholder="メルカリ&#9;Fender Japan Precision Bass PB62 確認済&#9;https://jp.mercari.com/item/m58051693079"></textarea>
@@ -215,6 +204,16 @@
     <div class="card"><h2>動作状態</h2><div id="setOpcond"></div><button class="btn ghost sm" onclick="addSetRow('opcond')">＋行</button><button class="btn sm" onclick="saveSet('op_conditions')">保存</button></div>
     <div class="card"><h2>ステータス</h2><p class="muted">※「売却済み」は集計の予約名。残してください。</p><div id="setStatus"></div><button class="btn ghost sm" onclick="addSetRow('status')">＋行</button><button class="btn sm" onclick="saveSet('statuses')">保存</button></div>
     <div class="card"><h2>販売期間の色分け</h2><div id="setPColor"></div><button class="btn ghost sm" onclick="addSetRow('pcolor')">＋行</button><button class="btn sm" onclick="saveSet('period_colors')">保存</button></div>
+    <div class="card"><details><summary style="cursor:pointer;color:var(--sub);font-weight:700">🔧 バックアップ・データ取り込み</summary><div style="margin-top:10px">
+      <button class="btn sm" onclick="doExport()">⬇ JSONエクスポート</button>
+      <button class="btn ghost sm" onclick="document.getElementById('importFile').click()">⬆ JSONインポート</button>
+      <input type="file" id="importFile" accept=".json" style="display:none" onchange="doImport(this)">
+      <div class="hr"></div>
+      <button class="btn sm" onclick="downloadCsvTemplate()">⬇ CSV雛形</button>
+      <button class="btn ghost sm" onclick="document.getElementById('csvFile').click()">⬆ CSVインポート</button>
+      <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="doCsvImport(this)">
+    </div></details></div>
+    <div class="card"><details ontoggle="if(this.open)loadLogs()"><summary style="cursor:pointer;color:var(--sub);font-weight:700">📝 操作ログ（全体・取消）</summary><div style="margin-top:10px"><button class="btn ghost sm" onclick="loadLogs()">更新</button><div id="logBody" style="margin-top:10px"></div></div></details></div>
     <div class="card" style="border-color:#fdecea"><details><summary style="cursor:pointer;color:var(--bad);font-weight:700">⚠ 危険な操作（在庫・出荷データの初期化）</summary><p class="muted" style="margin-top:8px">在庫・仕入れ・発注/出荷・ログのデータを消去します。<b>カテゴリ・販路・送料などの設定は残ります。</b>クラウド同期がオンの場合はその内容も上書きされます。<b>元に戻せません。</b>心配なら先に「JSONエクスポート」でバックアップを。</p><button class="btn danger" onclick="resetAll()">在庫・出荷データを初期化する（設定は残す）</button></details></div>
   </section>
 </main>
@@ -270,7 +269,7 @@ function doLogout(){ sb.auth.signOut(); CFG=null; STOCK=[]; }
 document.querySelectorAll('nav button').forEach(function(b){
   b.onclick=function(){document.querySelectorAll('nav button').forEach(function(x){x.classList.remove('active')});document.querySelectorAll('.view').forEach(function(x){x.classList.remove('active')});
     b.classList.add('active');$('v-'+b.dataset.v).classList.add('active');var v=b.dataset.v;
-    if(v==='dash')renderDash(dashFromStock());if(v==='analysis')loadAnalysis();if(v==='log')loadLogs();if(v==='settings')renderSettings();if(v==='manage'){renderManage();closeShip();}};
+    if(v==='analysis'){renderDash(dashFromStock());loadAnalysis();}if(v==='settings')renderSettings();if(v==='manage'){renderManage();closeShip();}};
 });
 
 /* ====== データ読込（ログイン後に1回、全件を取得してメモリ保持） ====== */
@@ -355,10 +354,8 @@ function analysisFromStock(fromStr,toStr){
   return {total:{count:items.length,revenue:tr,profit:tp,rate:tr>0?Math.round(tp/tr*1000)/10:0},byChannel:grp(function(x){return x.channel;}),byCategory:grp(function(x){return x.category;}),bySub:grp(function(x){return x.category+' / '+(x.subCategory||'(未設定)');}),byStaff:grp(function(x){return x.staff;}),byMonth:months};
 }
 function renderDash(d){
-  var cats=Object.keys(d.byCategory);
-  var catRows=cats.map(function(c){var o=d.byCategory[c];var rate=(o.revenue>0)?(Math.round(o.profit/o.revenue*1000)/10)+'%':'—';return '<tr><td>'+esc(c)+'</td><td>'+o.sold+'</td><td>'+profitHtml(o.profit)+'</td><td>'+rate+'</td></tr>';}).join('')||'<tr><td colspan="4" class="muted">データなし</td></tr>';
-  var sales=d.recentSales.map(function(s){return '<tr><td>'+esc(s.date)+'</td><td>'+esc(s.id)+'</td><td>'+esc(s.name)+'</td><td>'+esc(s.channel)+'</td><td>'+yen(s.salePrice)+'</td><td>'+profitHtml(s.profit)+'</td></tr>';}).join('')||'<tr><td colspan="6" class="muted">まだ売上がありません</td></tr>';
-  $('dashBody').innerHTML=
+  var el=$('anKpis');if(!el)return;
+  el.innerHTML=
     '<div class="herorow">'
     +'<div class="hero"><div class="l">累計利益</div><div class="n">'+yen(d.grossProfit)+' 円</div><div class="s">全期間</div></div>'
     +'<div class="hero fy"><div class="l">今年度利益</div><div class="n">'+yen(d.fyProfit)+' 円</div><div class="s">'+esc(d.fyLabel||'')+'</div></div>'
@@ -368,11 +365,7 @@ function renderDash(d){
       +'<div class="kpi"><div class="n">'+yen(d.soldRevenue)+'円</div><div class="l">累計売上</div></div>'
       +'<div class="kpi green"><div class="n">'+yen(d.netProfit)+'円</div><div class="l">累計キャッシュフロー（利益−在庫評価額）</div></div></div>'
     +'<div class="kpis small"><div class="kpi sm"><div class="n">'+d.soldCount+'点</div><div class="l">売却点数</div></div>'
-      +'<div class="kpi sm orange"><div class="n">'+yen(d.stockValue)+'円</div><div class="l">在庫評価額（参考）</div></div></div>'
-    +'<div class="card" style="margin-top:14px"><h3>売上と利益の推移（月別）</h3><canvas id="monthChart" height="120"></canvas></div>'
-    +'<div class="card"><h3>カテゴリ別（累計利益・利益率）</h3><table><tr><th>カテゴリ</th><th>売却数</th><th>累計利益</th><th>利益率</th></tr>'+catRows+'</table></div>'
-    +'<div class="card"><h3>最近の売上</h3><table><tr><th>日付</th><th>ID</th><th>商品名</th><th>販路</th><th>売価</th><th>利益</th></tr>'+sales+'</table></div>';
-  drawMonthlyChart(d.monthly);
+      +'<div class="kpi sm orange"><div class="n">'+yen(d.stockValue)+'円</div><div class="l">在庫評価額（参考）</div></div></div>';
 }
 function drawMonthlyChart(monthly){
   var cv=$('monthChart');if(!cv||typeof Chart==='undefined'||!monthly.length)return;
@@ -402,11 +395,8 @@ function buildDataLists(){
   var o=function(obj){return Object.keys(obj).sort().map(function(v){return '<option value="'+esc(v)+'">';}).join('');};
   el.innerHTML='<datalist id="dl-maker">'+o(mk)+'</datalist><datalist id="dl-name">'+o(nm)+'</datalist>';
 }
-function addBuyRow(){
-  buildDataLists();
-  var d=document.createElement('div');d.className='purchase-row';
-  d.innerHTML='<button class="del" onclick="this.parentNode.remove()">×</button>'
-    +'<div class="row"><div><label>カテゴリ</label><select class="b-cat" onchange="syncField(this)">'+opt(catNames())+'</select></div>'
+function purchaseRowInner(){
+  return '<div class="row"><div><label>カテゴリ</label><select class="b-cat" onchange="syncField(this)">'+opt(catNames())+'</select></div>'
       +'<div class="sub-wrap"><label>小カテゴリ</label><select class="b-sub"></select></div>'
       +'<div><label>メーカー名</label><input class="b-maker" list="dl-maker" autocomplete="off"></div>'
       +'<div style="flex:2"><label>商品名</label><input class="b-name" list="dl-name" autocomplete="off"></div></div>'
@@ -418,9 +408,55 @@ function addBuyRow(){
     +'<div class="row" style="align-items:flex-end"><div><label>送料パターン</label><select class="b-ship"><option value=""></option>'+opt(CFG.shipPatterns.map(function(p){return p.name;}))+'</select></div>'
       +'<div><label>ステータス</label><select class="b-status">'+opt(CFG.statuses)+'</select></div>'
       +'<div style="flex:2"><label>&nbsp;</label><div class="flags"><label><input type="checkbox" class="b-home"> 🏠自宅保管</label><label><input type="checkbox" class="b-chk"> 📮送料確認</label></div></div></div>';
-  $('buyRows').appendChild(d);
+}
+function wirePurchaseRow(d){
   d.querySelector('.b-op').onchange=function(){syncOpStatus(this);};
   syncField(d.querySelector('.b-cat'));syncOpStatus(d.querySelector('.b-op'));
+}
+function addBuyRow(){
+  buildDataLists();
+  var d=document.createElement('div');d.className='purchase-row';
+  d.innerHTML='<button class="del" onclick="this.parentNode.remove()">×</button>'+purchaseRowInner();
+  $('buyRows').appendChild(d);
+  wirePurchaseRow(d);
+}
+function toggleManualAdd(){
+  var box=$('manualAddBox');
+  if(!box)return;
+  if(box.style.display==='none'){
+    buildDataLists();
+    box.style.display='block';
+    box.innerHTML='<div class="purchase-row" id="manualAddRow" style="border-color:var(--brand2)">'+purchaseRowInner()+'</div>'
+      +'<div style="margin-top:8px"><button class="btn sm" onclick="submitManualAdd()">登録する</button> <button class="btn ghost sm" onclick="toggleManualAdd()">閉じる</button></div>';
+    wirePurchaseRow($('manualAddRow'));
+  }else{
+    box.style.display='none';box.innerHTML='';
+  }
+}
+function submitManualAdd(){
+  var r=$('manualAddRow');if(!r)return;
+  var name=r.querySelector('.b-name').value.trim();
+  if(!name){toast('商品名を入力してください');return;}
+  var acc=[];r.querySelectorAll('.cf-field select').forEach(function(s){if(s.value)acc.push(s.dataset.label+'：'+s.value);});
+  var ss=r.querySelector('.b-sub');
+  var it={category:r.querySelector('.b-cat').value,subCategory:(r.querySelector('.sub-wrap').style.display!=='none'&&ss)?ss.value:'',maker:r.querySelector('.b-maker').value.trim(),name:name,cost:Number(r.querySelector('.b-cost').value)||0,condition:r.querySelector('.b-cond').value,opCondition:r.querySelector('.b-op').value,staff:r.querySelector('.b-staff').value,accessory:acc.join(' ・ '),shipPattern:(r.querySelector('.b-ship')?r.querySelector('.b-ship').value:''),status:(r.querySelector('.b-status')?r.querySelector('.b-status').value:''),home:!!(r.querySelector('.b-home')&&r.querySelector('.b-home').checked),shipCheck:!!(r.querySelector('.b-chk')&&r.querySelector('.b-chk').checked)};
+  var id=nextId(prefixOf(it.category));
+  var o={id:id,category:it.category,subCategory:it.subCategory,maker:it.maker,name:it.name,condition:it.condition,opCondition:it.opCondition,accessory:it.accessory,staff:it.staff,cost:it.cost,buyDate:todayStr(),photo:'',status:it.status||defaultStatus(),listDate:'',shipPattern:it.shipPattern||'',prices:{},home:!!it.home,shipCheck:!!it.shipCheck,channel:'',salePrice:'',profit:'',shipDate:'',saleDate:'',note:noteFromOp(it.opCondition),listings:{}};
+  computeProfits(o);state.items.push(o);logAction('仕入れ',id,it.name,(it.maker||'')+' / 仕入 '+it.cost+'円'+(it.staff?' / '+it.staff:'')+'（在庫管理から手動登録）',null);
+  STOCK=state.items;save();
+  toggleManualAdd();
+  renderManage();renderDash(dashFromStock());refreshOpenLogs();
+  toast(id+' を登録しました');
+}
+function deleteStockItem(id){
+  var it=state.items.filter(function(x){return x.id===id;})[0];if(!it)return;
+  var warn=(it.status==='売却済み')?'\n※このアイテムは「売却済み」です。削除すると売上集計からも消えます。':'';
+  if(!confirm('『'+it.id+' '+it.name+'』を削除します。よろしいですか？'+warn+'\n（設定タブのログから元に戻せます）'))return;
+  logAction('削除',id,it.name,(it.maker||'')+' '+it.name+' を在庫から削除',JSON.parse(JSON.stringify(it)));
+  state.items=state.items.filter(function(x){return x.id!==id;});STOCK=state.items;
+  state.delist=(state.delist||[]).filter(function(d){return d.id!==id;});
+  save();renderManage();renderShipList();renderDelist();renderDash(dashFromStock());refreshOpenLogs();
+  toast('削除しました');
 }
 function syncField(catSel){
   var row=catSel.closest('.purchase-row'),cat=catSel.value;
@@ -500,7 +536,7 @@ function renderManage(){
         +'<div class="ctrl" style="margin-top:8px"><div class="f"><label>ステータス</label><select class="e-status">'+opt(CFG.statuses,x.status)+'</select></div>'
           +'<div class="f"><label>送料パターン</label><select class="e-ship" onchange="recalc(\''+id+'\')">'+optPattern(x.shipPattern)+'</select></div>'+pin+'</div>'
         +'<div class="prof" id="prof-'+id+'" style="margin-top:8px"></div>'
-        +'<div style="margin-top:10px"><button class="btn ghost sm" onclick="toggleEdit(\''+id+'\')">✏️ 商品情報の編集</button> <button class="btn sm" onclick="saveItem(\''+id+'\')">保存</button>'+(x.status!=='売却済み'?' <button class="btn accent sm" onclick="selShip(\''+id+'\')">🚚 出荷依頼する</button>':'')+'</div>'
+        +'<div style="margin-top:10px"><button class="btn ghost sm" onclick="toggleEdit(\''+id+'\')">✏️ 商品情報の編集</button> <button class="btn sm" onclick="saveItem(\''+id+'\')">保存</button>'+(x.status!=='売却済み'?' <button class="btn accent sm" onclick="selShip(\''+id+'\')">🚚 出荷依頼する</button>':'')+' <button class="btn danger sm" onclick="deleteStockItem(\''+id+'\')">🗑 削除</button></div>'
         +'<div class="editfields" id="edit-'+id+'" style="display:none;margin-top:8px">'+editFields(x)+'</div>'
       +'</div></div>';
   }).join('');
@@ -974,7 +1010,8 @@ function undo(logId){if(!confirm('この操作を取り消し（削除）しま�
   if(g.type==='仕入れ'){var it=state.items.filter(function(x){return x.id===g.item_id;})[0];if(it&&it.status==='売却済み'){toast('売却済みのため取消不可。先に出荷ログを取消してください');return;}state.items=state.items.filter(function(x){return x.id!==g.item_id;});STOCK=state.items;}
   else if(g.type==='出荷'){state.delist=(state.delist||[]).filter(function(d){return d.id!==g.item_id;});var it2=state.items.filter(function(x){return x.id===g.item_id;})[0];if(it2){it2.status='未販売';it2.channel='';it2.salePrice='';it2.profit='';it2.shipDate='';it2.saleDate='';computeProfits(it2);}}
   else if(g.type==='編集'){var it3=state.items.filter(function(x){return x.id===g.item_id;})[0];if(it3&&g.revert){applyRevert(it3,g.revert);computeProfits(it3);}}
-  g.state='取消済';save();renderManage();renderShipList();renderDash(dashFromStock());loadLogs();refreshOpenLogs();toast('取り消しました');}
+  else if(g.type==='削除'){if(g.revert&&!state.items.filter(function(x){return x.id===g.item_id;})[0]){state.items.push(g.revert);STOCK=state.items;}}
+  g.state='取消済';save();renderManage();renderShipList();renderDelist();renderDash(dashFromStock());loadLogs();refreshOpenLogs();toast('取り消しました');}
 
 function saveSet(table){
   if(table==='cat_defaults'){
@@ -1211,8 +1248,7 @@ function anDetailTable(items){
   var rows=list.map(function(x){var p=salePeriod(x);
     return '<tr><td>'+esc(x.saleDate||'')+'</td><td style="font-family:monospace">'+esc(x.id)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.category||'')+(x.subCategory?' / '+esc(x.subCategory):'')+'</td><td>'+esc(x.staff||'')+'</td><td>'+esc(x.channel||'')+'</td><td>'+yen(x.cost)+'</td><td>'+yen(x.salePrice)+'</td><td>'+profitHtml(x.profit)+'</td><td>'+(p==null?'—':p+'日')+'</td></tr>';}).join('')||'<tr><td colspan="10" class="muted">データなし</td></tr>';
   return '<table><tr><th>売却日</th><th>ID</th><th>商品名</th><th>カテゴリ</th><th>担当</th><th>販路</th><th>仕入</th><th>売価</th><th>利益</th><th>販売日数</th></tr>'+rows+'</table>'
-    +(items.length>300?'<p class="muted">最新300件のみ表示しています（CSVは全件）。</p>':'')
-    +'<div style="margin-top:10px"><button class="btn ghost sm" onclick="anDetailCsv()">⬇ 明細をCSVで保存</button></div>';
+    +(items.length>300?'<p class="muted">最新300件のみ表示しています。</p>':'');
 }
 function dlCsv(name,rows){
   var csv=rows.map(function(r){return r.map(function(c){var t=String(c==null?'':c);return /[",\n]/.test(t)?'"'+t.replace(/"/g,'""')+'"':t;}).join(',');}).join('\r\n');
@@ -1222,10 +1258,6 @@ function anCsv(){var isM=(anAxis==='month');
   var out=[[isM?'月':'区分','件数','売上','利益','利益率(%)','平均利益','平均販売日数']];
   AN_ROWS.forEach(function(o){out.push([isM?monthLabel(o.key):o.key,o.count,o.revenue,o.profit,o.rate,o.avgProfit,o.avgDays==null?'':o.avgDays]);});
   dlCsv('売上分析_'+anAxis+'_'+todayStr().replace(/\//g,'')+'.csv',out);}
-function anDetailCsv(){
-  var out=[['売却日','商品ID','商品名','カテゴリ','小カテゴリ','担当者','販路','仕入価格','売却価格','利益','販売日数']];
-  anItems().forEach(function(x){var p=salePeriod(x);out.push([x.saleDate||'',x.id,x.name,x.category||'',x.subCategory||'',x.staff||'',x.channel||'',x.cost||0,x.salePrice||0,x.profit||0,p==null?'':p]);});
-  dlCsv('売却明細_'+todayStr().replace(/\//g,'')+'.csv',out);}
 function resetAll(){if(!confirm('在庫・仕入れ・発注/出荷・ログのデータを消去します。設定（カテゴリ・販路・送料など）は残ります。よろしいですか？（元に戻せません）'))return;if(!confirm('最終確認：本当に在庫・出荷などのデータを消去しますか？'))return;var keepSettings=state.settings,keepCloud={cloudUrl:state.cloudUrl,cloudSecret:state.cloudSecret,lineDirect:state.lineDirect};state=defaultState();state.settings=keepSettings;Object.assign(state,keepCloud);localStorage.setItem(KEY,JSON.stringify(state));rebuildAll();renderDash(dashFromStock());if(CU())pushCloud();toast('在庫・出荷データを初期化しました（設定は保持）');}
 initApp();
 
