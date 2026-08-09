@@ -154,6 +154,7 @@
     </div>
     <div id="manageList"><div class="loading">読み込み中…</div></div>
     <input type="file" id="photoPicker" accept="image/*" style="display:none">
+    <div id="dataLists" style="display:none"></div>
     <div class="card"><div style="cursor:pointer" onclick="toggleLog('manage')"><b>📝 操作ログ（在庫の変更）</b> <span id="logcaret-manage">▼</span></div><div id="logbox-manage" style="display:none;margin-top:8px"></div></div>
     <div class="card"><div style="cursor:pointer" onclick="toggleLog('ship')"><b>📝 操作ログ（出荷）</b> <span id="logcaret-ship">▼</span></div><div id="logbox-ship" style="display:none;margin-top:8px"></div></div>
   </section>
@@ -184,7 +185,7 @@
   <section id="v-log" class="view"><div class="card"><h2>📝 操作ログ（全体）</h2><button class="btn ghost sm" onclick="loadLogs()">更新</button><div id="logBody" style="margin-top:10px"></div></div></section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-09g</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-09h</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -395,13 +396,21 @@ function prefixOf(cat){var r=CFG.categories.filter(function(c){return c['カテ�
 
 /* ====== 仕入れ ====== */
 function initBuy(){$('buyRows').innerHTML='';addBuyRow();}
+function buildDataLists(){
+  var el=$('dataLists');if(!el)return;
+  var mk={},nm={};
+  STOCK.forEach(function(x){if(x.maker)mk[String(x.maker).trim()]=1;if(x.name)nm[String(x.name).trim()]=1;});
+  var o=function(obj){return Object.keys(obj).sort().map(function(v){return '<option value="'+esc(v)+'">';}).join('');};
+  el.innerHTML='<datalist id="dl-maker">'+o(mk)+'</datalist><datalist id="dl-name">'+o(nm)+'</datalist>';
+}
 function addBuyRow(){
+  buildDataLists();
   var d=document.createElement('div');d.className='purchase-row';
   d.innerHTML='<button class="del" onclick="this.parentNode.remove()">×</button>'
     +'<div class="row"><div><label>カテゴリ</label><select class="b-cat" onchange="syncField(this)">'+opt(catNames())+'</select></div>'
       +'<div class="sub-wrap"><label>小カテゴリ</label><select class="b-sub"></select></div>'
-      +'<div><label>メーカー名</label><input class="b-maker"></div>'
-      +'<div style="flex:2"><label>商品名</label><input class="b-name"></div></div>'
+      +'<div><label>メーカー名</label><input class="b-maker" list="dl-maker" autocomplete="off"></div>'
+      +'<div style="flex:2"><label>商品名</label><input class="b-name" list="dl-name" autocomplete="off"></div></div>'
     +'<div class="row"><div><label>仕入価格（円）</label><input type="number" class="b-cost"></div>'
       +'<div><label>状態</label><select class="b-cond">'+opt(CFG.conditions||["新品、未使用","未使用に近い","目立った傷や汚れなし","やや傷や汚れあり","傷や汚れあり","全体的に状態が悪い"])+'</select></div>'
       +'<div><label>動作状態</label><select class="b-op">'+opt(CFG.opConditions)+'</select></div>'
@@ -459,7 +468,7 @@ function optPattern(sel){return '<option value=""></option>'+CFG.shipPatterns.ma
 function renderSummary(){var sc={},cc={};STOCK.forEach(function(x){sc[x.status]=(sc[x.status]||0)+1;if(x.status!=='売却済み')cc[x.category]=(cc[x.category]||0)+1;});
   $('stockSummary').innerHTML='<div><div class="muted">ステータス別</div>'+CFG.statuses.map(function(s){return '<span class="chip">'+esc(s)+' <b>'+(sc[s]||0)+'</b></span>';}).join('')+'</div><div><div class="muted">カテゴリ別在庫</div>'+catNames().map(function(c){return '<span class="chip">'+esc(c)+' <b>'+(cc[c]||0)+'</b></span>';}).join('')+'</div>';}
 function renderManage(){
-  var el=$('manageList');if(!CFG||!el)return;renderSummary();updateUnlistedBadge();
+  var el=$('manageList');if(!CFG||!el)return;renderSummary();updateUnlistedBadge();buildDataLists();
   var q=$('mSearch').value.trim(),showImg=$('showImg').checked,pMin=$('pMin').value,pMax=$('pMax').value,hasR=(pMin!==''||pMax!=='');
   var list=STOCK.filter(function(x){
     if(!(manageCat==='すべて'||x.category===manageCat))return false;
@@ -487,13 +496,12 @@ function renderManage(){
         +'<div class="sub">'+esc(x.category)+(x.subCategory?' / '+esc(x.subCategory):'')+' / '+esc(x.maker)+(x.staff?' ・ 担当 '+esc(x.staff):'')+'</div>'
         +'<div class="sub">'+esc(x.condition||'')+(x.opCondition?' ・ '+esc(x.opCondition):'')+(x.accessory?' ・ '+esc(x.accessory):'')+'</div>'
         +'<div class="sub">仕入 '+yen(x.cost)+'円'+(dates.length?' ・ '+dates.join(' ・ '):'')+'</div>'
-        +listingLinks(x)
         +'<div class="flags"><label><input type="checkbox" class="e-home"'+(x.home?' checked':'')+'> 🏠自宅保管</label><label><input type="checkbox" class="e-chk"'+(x.shipCheck?' checked':'')+'> 📮送料確認</label></div>'
         +'<div style="margin-top:6px"><label style="margin:0">備考（短文メモ）</label><input class="e-note" value="'+esc(x.note||'')+'" placeholder="例：ノブ欠品／要清掃 など"></div>'
         +'<div class="ctrl" style="margin-top:8px"><div class="f"><label>ステータス</label><select class="e-status">'+opt(CFG.statuses,x.status)+'</select></div>'
           +'<div class="f"><label>送料パターン</label><select class="e-ship" onchange="recalc(\''+id+'\')">'+optPattern(x.shipPattern)+'</select></div>'+pin+'</div>'
         +'<div class="prof" id="prof-'+id+'" style="margin-top:8px"></div>'
-        +'<div style="margin-top:10px"><button class="btn ghost sm" onclick="toggleEdit(\''+id+'\')">✏️ 仕入れ情報を編集</button> <button class="btn sm" onclick="saveItem(\''+id+'\')">保存</button>'+(x.status!=='売却済み'?' <button class="btn accent sm" onclick="selShip(\''+id+'\')">🚚 出荷依頼する</button>':'')+'</div>'
+        +'<div style="margin-top:10px"><button class="btn ghost sm" onclick="toggleEdit(\''+id+'\')">✏️ 商品情報の編集</button> <button class="btn sm" onclick="saveItem(\''+id+'\')">保存</button>'+(x.status!=='売却済み'?' <button class="btn accent sm" onclick="selShip(\''+id+'\')">🚚 出荷依頼する</button>':'')+'</div>'
         +'<div class="editfields" id="edit-'+id+'" style="display:none;margin-top:8px">'+editFields(x)+'</div>'
       +'</div></div>';
   }).join('');
@@ -502,8 +510,8 @@ function renderManage(){
 function editFields(x){var subs=CFG.subcategories[x.category]||[];
   return '<div class="row"><div><label>カテゴリ</label><select class="ed-cat" onchange="editCatChange(\''+esc(x.id)+'\')">'+opt(catNames(),x.category)+'</select></div>'
     +'<div><label>小カテゴリ</label><select class="ed-sub"><option value=""></option>'+opt(subs,x.subCategory)+'</select></div>'
-    +'<div><label>メーカー</label><input class="ed-maker" value="'+esc(x.maker||'')+'"></div>'
-    +'<div style="flex:2"><label>商品名</label><input class="ed-name" value="'+esc(x.name||'')+'"></div></div>'
+    +'<div><label>メーカー</label><input class="ed-maker" list="dl-maker" autocomplete="off" value="'+esc(x.maker||'')+'"></div>'
+    +'<div style="flex:2"><label>商品名</label><input class="ed-name" list="dl-name" autocomplete="off" value="'+esc(x.name||'')+'"></div></div>'
     +'<div class="row"><div><label>仕入価格</label><input type="number" class="ed-cost" value="'+(x.cost||'')+'"></div>'
     +'<div><label>状態</label><select class="ed-cond">'+opt(CFG.conditions||["新品、未使用","未使用に近い","目立った傷や汚れなし","やや傷や汚れあり","傷や汚れあり","全体的に状態が悪い"],x.condition)+'</select></div>'
     +'<div><label>動作状態</label><select class="ed-op">'+opt(CFG.opConditions,x.opCondition)+'</select></div>'
@@ -511,7 +519,8 @@ function editFields(x){var subs=CFG.subcategories[x.category]||[];
     +'<div style="flex:2"><label>付属品</label><input class="ed-acc" value="'+esc(x.accessory||'')+'"></div></div>'
     +'<div class="row"><div><label>販売開始日</label><input type="date" class="ed-list" value="'+esc(toISO(x.listDate))+'"></div>'
     +'<div><label>売却日</label><input type="date" class="ed-sale" value="'+esc(toISO(x.saleDate))+'"></div>'
-    +'<div style="flex:2"><label>&nbsp;</label><div class="muted">空欄にすると未設定に戻ります。販売期間はこの2つの日付から計算されます。</div></div></div>';
+    +'<div style="flex:2"><label>&nbsp;</label><div class="muted">空欄にすると未設定に戻ります。販売期間はこの2つの日付から計算されます。</div></div></div>'
+    +listingLinks(x);
 }
 function toISO(s){var m=/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/.exec(String(s==null?'':s));if(!m)return '';var q=function(n){return ('0'+n).slice(-2);};return m[1]+'-'+q(m[2])+'-'+q(m[3]);}
 function fromISO(v){var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v||'').trim());return m?(m[1]+'/'+m[2]+'/'+m[3]):'';}
