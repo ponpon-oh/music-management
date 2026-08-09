@@ -128,9 +128,8 @@
       <div class="hr"></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span id="unlistedBadge" class="pill"></span>
-        <button class="btn ghost sm" onclick="copyUnlisted()">🔗 URL未登録リストをコピー</button>
-        <button class="btn ghost sm" onclick="copySyncList()">📤 同期用リストをコピー（販売中の全件）</button>
-        <span class="muted">未登録＝どの販路にもURLが1つも無いもの／同期用＝現在のURLごと書き出して、再出品でURLが変わったものを洗い出すため</span>
+        <button class="btn sm" onclick="copySyncList()">📤 URL同期用リストをコピー</button>
+        <span class="muted">「販売中」の全件を現在のURLごと書き出します。新規登録も、再出品でURLが変わったものの更新も、これ1つで済みます</span>
       </div>
       <div id="unlistedBox" style="display:none;margin-top:8px"></div>
     </div>
@@ -185,7 +184,7 @@
   <section id="v-log" class="view"><div class="card"><h2>📝 操作ログ（全体）</h2><button class="btn ghost sm" onclick="loadLogs()">更新</button><div id="logBody" style="margin-top:10px"></div></div></section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-09h</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-09i</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
