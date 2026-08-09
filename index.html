@@ -129,7 +129,7 @@
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <span id="unlistedBadge" class="pill"></span>
         <button class="btn ghost sm" onclick="copyUnlisted()">🔗 URL未登録リストをコピー</button>
-        <span class="muted">「販売中」でURLが未登録の商品だけを書き出します</span>
+        <span class="muted">「販売中」で、どの販路にもURLが1つも入っていない商品だけを書き出します</span>
       </div>
       <div id="unlistedBox" style="display:none;margin-top:8px"></div>
     </div>
@@ -183,7 +183,7 @@
   <section id="v-log" class="view"><div class="card"><h2>📝 操作ログ（全体）</h2><button class="btn ghost sm" onclick="loadLogs()">更新</button><div id="logBody" style="margin-top:10px"></div></div></section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-09c</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-09d</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -687,17 +687,18 @@ var NOLIST='(出品なし)';
 function isUrl(u){return /^https?:\/\//.test(String(u==null?'':u));}
 function missingChannels(x){var ls=x.listings||{};
   return channelNames().filter(function(n){var v=ls[n];return !isUrl(v)&&v!==NOLIST;});}
-function unlistedItems(){return STOCK.filter(function(x){return x.status==='販売中'&&missingChannels(x).length;});}
+function hasAnyListing(x){var ls=x.listings||{},chs=channelNames();for(var i=0;i<chs.length;i++){var v=ls[chs[i]];if(isUrl(v)||v===NOLIST)return true;}return false;}
+function unlistedItems(){return STOCK.filter(function(x){return x.status==='販売中'&&!hasAnyListing(x);});}
 function updateUnlistedBadge(){var el=$('unlistedBadge');if(!el)return;
   var n=unlistedItems().length;
-  el.textContent='URL未登録 '+n+'件';
+  el.textContent='URL未登録 '+n+'件';el.title='「販売中」で、どの販路にも出品URLが1つも入っていない商品の数';
   el.style.background=n?'#fff3e0':'#e0f2f1';el.style.color=n?'#e65100':'#00695c';}
 function unlistedText(){
   return unlistedItems().map(function(x){
     return [x.id,(x.maker||''),(x.name||''),'未登録:'+missingChannels(x).join(',')].join('\t');}).join('\n');}
 function copyUnlisted(){
   var box=$('unlistedBox'),txt=unlistedText();
-  if(!txt){box.style.display='block';box.innerHTML='<div class="muted">「販売中」でURLが未登録の商品はありません。</div>';return;}
+  if(!txt){box.style.display='block';box.innerHTML='<div class="muted">URLが1つも入っていない「販売中」の商品はありません。</div>';return;}
   box.style.display='block';
   box.innerHTML='<p class="muted">この内容をチャットに貼り付けてください。</p><textarea id="unlistedTa" rows="6" readonly></textarea>';
   var ta=$('unlistedTa');ta.value=txt;ta.focus();ta.select();
