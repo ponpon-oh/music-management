@@ -183,6 +183,7 @@
   <section id="v-log" class="view"><div class="card"><h2>📝 操作ログ（全体）</h2><button class="btn ghost sm" onclick="loadLogs()">更新</button><div id="logBody" style="margin-top:10px"></div></div></section>
 
   <section id="v-settings" class="view">
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-09b</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -197,7 +198,7 @@
       <button class="btn ghost sm" onclick="document.getElementById('csvFile').click()">⬆ CSVインポート</button>
       <input type="file" id="csvFile" accept=".csv" style="display:none" onchange="doCsvImport(this)"></div>
     <div class="card"><h2>🔗 出品URLの取り込み</h2>
-      <p class="muted">「販路 / 出品タイトル / URL」をタブ区切りで1行ずつ貼り付けて「照合する」。在庫と自動で突き合わせます。販路が空でもURLから推測します。</p>
+      <p class="muted">タブ区切りで1行ずつ貼り付けて「照合する」。<b>在庫IDを含めれば確実にその商品に結びつきます</b>（例：<code>B011　Yahoo!フリマ　https://…</code>）。IDがない場合は出品タイトルから自動照合します。URLの代わりに <code>-</code> と書くと「出品なし」として記録します。</p>
       <textarea id="lstPaste" rows="6" placeholder="メルカリ&#9;Fender Japan Precision Bass PB62 確認済&#9;https://jp.mercari.com/item/m58051693079"></textarea>
       <div style="margin-top:8px"><button class="btn sm" onclick="matchListings()">照合する</button></div>
       <div id="lstResult" style="margin-top:10px"></div></div>
@@ -731,19 +732,33 @@ function matchListings(){
   var txt=$('lstPaste').value||'';
   var lines=txt.split(/\n/).map(function(l){return l.trim();}).filter(Boolean);
   var pool=STOCK.filter(function(x){return x.status!=='売却済み';});
+  var idMap={};STOCK.forEach(function(x){idMap[String(x.id).toLowerCase()]=x.id;});
+  var chs0=channelNames();
+  var chLower={};chs0.forEach(function(n){chLower[String(n).toLowerCase()]=n;});
   LST_ROWS=lines.map(function(l){
-    var ch='',title='',url='';
-    var p=l.split('\t').map(function(t){return t.trim();}).filter(function(t){return t!=='';});
-    if(p.length<2)p=l.split(/\s*,\s*/).map(function(t){return t.trim();}).filter(function(t){return t!=='';});
+    var ch='',title='',url='',fixId='';
     var um=/(https?:\/\/\S+)/.exec(l);url=um?um[1]:'';
-    if(p.length>=3){ch=p[0];title=p[1];if(!url&&/^(-|なし|出品なし)$/.test(p[2]))url=NOLIST;}
-    else if(p.length===2){title=p[0]===url?p[1]:p[0];}
-    else {title=l.replace(url,'').trim();}
-    if(!ch||channelNames().indexOf(ch)<0)ch=guessCh(url)||channelNames()[0]||'';
-    var cands=pool.map(function(x){return {id:x.id,name:((x.maker?x.maker+' ':'')+x.name),s:scoreMatch(x,title)};})
-      .sort(function(a,b){return b.s-a.s;}).slice(0,5);
-    var auto=(cands[0]&&cands[0].s>=0.5&&(!cands[1]||(cands[0].s-cands[1].s)>=0.1))?cands[0].id:'';
-    return {ch:ch,title:title,url:url,cands:cands,sel:auto};
+    var body=url?l.split(url).join(' '):l;
+    var p=body.split(/[\t,\u3001\uff0c\s\u3000]+/).filter(function(t){return t!=='';});
+    var rest=[];
+    p.forEach(function(f){
+      if(!fixId&&idMap[f.toLowerCase()]){fixId=idMap[f.toLowerCase()];return;}
+      if(!ch&&chLower[f.toLowerCase()]){ch=chLower[f.toLowerCase()];return;}
+      if(!url&&/^(-|なし|出品なし|無し)$/.test(f)){url=NOLIST;return;}
+      rest.push(f);
+    });
+    title=rest.join(' ');
+    if(!ch)ch=guessCh(url)||chs0[0]||'';
+    var cands;
+    if(fixId){
+      var it=STOCK.filter(function(x){return x.id===fixId;})[0];
+      cands=[{id:fixId,name:it?((it.maker?it.maker+' ':'')+it.name):fixId,s:1}];
+    }else{
+      cands=pool.map(function(x){return {id:x.id,name:((x.maker?x.maker+' ':'')+x.name),s:scoreMatch(x,title)};})
+        .sort(function(a,b){return b.s-a.s;}).slice(0,5);
+    }
+    var auto=fixId||((cands[0]&&cands[0].s>=0.5&&(!cands[1]||(cands[0].s-cands[1].s)>=0.1))?cands[0].id:'');
+    return {ch:ch,title:title||(fixId?fixId:''),url:url,cands:cands,sel:auto};
   }).filter(function(r){return r.url;});
   renderLstResult();
 }
@@ -756,10 +771,12 @@ function renderLstResult(){
     var itSel='<select onchange="LST_ROWS['+i+'].sel=this.value"><option value="">（結びつけない）</option>'
       +r.cands.map(function(c){return '<option value="'+esc(c.id)+'"'+(c.id===r.sel?' selected':'')+'>'+esc(c.id+' '+c.name)+' … '+Math.round(c.s*100)+'%</option>';}).join('')+'</select>';
     var warn=r.sel?'':' <span class="pill" style="background:#fff9c4;color:#f57f17">要確認</span>';
-    return '<tr><td style="max-width:280px">'+esc(r.title)+warn+'<div class="muted" style="word-break:break-all;font-size:11px">'+esc(r.url)+'</div></td><td>'+chSel+'</td><td>'+itSel+'</td></tr>';
+    var head=r.title?esc(r.title):'<span class="muted">（タイトルなし・IDで指定）</span>';
+    return '<tr><td style="max-width:280px">'+head+warn+'<div class="muted" style="word-break:break-all;font-size:11px">'+esc(r.url)+'</div></td><td>'+chSel+'</td><td>'+itSel+'</td></tr>';
   }).join('');
   var auto=LST_ROWS.filter(function(r){return r.sel;}).length;
-  el.innerHTML='<p class="muted">'+LST_ROWS.length+'件中 '+auto+'件を自動で照合しました。違うものは選び直してください。</p>'
+  var note=(auto===0)?'<div class="msgbox" style="background:#fff3e0;border-color:#ffcc80"><b>1件も自動照合できませんでした。</b>\n貼り付けた行に在庫ID（例：B011）が含まれているか、そのIDが在庫に存在するかを確認してください。</div>':'';
+  el.innerHTML=note+'<p class="muted">'+LST_ROWS.length+'件中 '+auto+'件を自動で照合しました。違うものは選び直してください。</p>'
     +'<div style="overflow-x:auto"><table><tr><th>出品タイトル / URL</th><th>販路</th><th>結びつける在庫</th></tr>'+rows+'</table></div>'
     +'<div style="margin-top:10px"><button class="btn" onclick="applyListings()">この内容で登録する</button></div>';
 }
