@@ -183,7 +183,7 @@
   <section id="v-log" class="view"><div class="card"><h2>📝 操作ログ（全体）</h2><button class="btn ghost sm" onclick="loadLogs()">更新</button><div id="logBody" style="margin-top:10px"></div></div></section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-09b</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-09c</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -507,8 +507,14 @@ function editFields(x){var subs=CFG.subcategories[x.category]||[];
     +'<div><label>状態</label><select class="ed-cond">'+opt(CFG.conditions||["新品、未使用","未使用に近い","目立った傷や汚れなし","やや傷や汚れあり","傷や汚れあり","全体的に状態が悪い"],x.condition)+'</select></div>'
     +'<div><label>動作状態</label><select class="ed-op">'+opt(CFG.opConditions,x.opCondition)+'</select></div>'
     +'<div><label>担当者</label><select class="ed-staff"><option value=""></option>'+opt(CFG.staff,x.staff)+'</select></div>'
-    +'<div style="flex:2"><label>付属品</label><input class="ed-acc" value="'+esc(x.accessory||'')+'"></div></div>';
+    +'<div style="flex:2"><label>付属品</label><input class="ed-acc" value="'+esc(x.accessory||'')+'"></div></div>'
+    +'<div class="row"><div><label>仕入日</label><input type="date" class="ed-buy" value="'+esc(toISO(x.buyDate))+'"></div>'
+    +'<div><label>販売開始日</label><input type="date" class="ed-list" value="'+esc(toISO(x.listDate))+'"></div>'
+    +'<div><label>売却日</label><input type="date" class="ed-sale" value="'+esc(toISO(x.saleDate))+'"></div>'
+    +'<div style="flex:2"><label>&nbsp;</label><div class="muted">空欄にすると未設定に戻ります。販売期間はこの2つの日付から計算されます。</div></div></div>';
 }
+function toISO(s){var m=/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/.exec(String(s==null?'':s));if(!m)return '';var q=function(n){return ('0'+n).slice(-2);};return m[1]+'-'+q(m[2])+'-'+q(m[3]);}
+function fromISO(v){var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v||'').trim());return m?(m[1]+'/'+m[2]+'/'+m[3]):'';}
 function editCatChange(id){var row=$('it-'+id),cat=row.querySelector('.ed-cat').value,subs=CFG.subcategories[cat]||[];row.querySelector('.ed-sub').innerHTML='<option value=""></option>'+opt(subs);}
 function toggleItem(id){var b=$('body-'+id),c=$('caret-'+id);if(b.style.display==='none'){b.style.display='block';c.textContent='▲';openSet[id]=true;recalc(id);}else{b.style.display='none';c.textContent='▼';delete openSet[id];}}
 function toggleEdit(id){var e=$('edit-'+id);e.style.display=(e.style.display==='none')?'block':'none';}
@@ -888,11 +894,12 @@ function submitPurchase(){
 function saveItem(id){
   var row=document.getElementById('it-'+id),prices={};row.querySelectorAll('.e-price').forEach(function(inp){var v=Number(inp.value)||0;if(v)prices[inp.dataset.ch]=v;});
   var editing=false,ed=document.getElementById('edit-'+id),patch={status:row.querySelector('.e-status').value,shipPattern:row.querySelector('.e-ship').value,home:row.querySelector('.e-home').checked,shipCheck:row.querySelector('.e-chk').checked};
-  if(ed&&ed.style.display!=='none'){editing=true;patch.category=row.querySelector('.ed-cat').value;patch.subCategory=row.querySelector('.ed-sub').value;patch.maker=row.querySelector('.ed-maker').value.trim();patch.name=row.querySelector('.ed-name').value.trim();patch.cost=Number(row.querySelector('.ed-cost').value)||0;patch.condition=row.querySelector('.ed-cond').value;patch.opCondition=row.querySelector('.ed-op').value;patch.staff=row.querySelector('.ed-staff').value;patch.accessory=row.querySelector('.ed-acc').value.trim();}
+  if(ed&&ed.style.display!=='none'){editing=true;patch.category=row.querySelector('.ed-cat').value;patch.subCategory=row.querySelector('.ed-sub').value;patch.maker=row.querySelector('.ed-maker').value.trim();patch.name=row.querySelector('.ed-name').value.trim();patch.cost=Number(row.querySelector('.ed-cost').value)||0;patch.condition=row.querySelector('.ed-cond').value;patch.opCondition=row.querySelector('.ed-op').value;patch.staff=row.querySelector('.ed-staff').value;patch.accessory=row.querySelector('.ed-acc').value.trim();var _b=row.querySelector('.ed-buy'),_l=row.querySelector('.ed-list'),_s=row.querySelector('.ed-sale');if(_b)patch.buyDate=fromISO(_b.value);if(_l)patch.listDate=fromISO(_l.value);if(_s)patch.saleDate=fromISO(_s.value);}
   var it=state.items.filter(function(x){return x.id===id;})[0];if(!it)return;
-  var revert={status:it.status,shipPattern:it.shipPattern,prices:it.prices,home:it.home,shipCheck:it.shipCheck,listDate:it.listDate,saleDate:it.saleDate,note:it.note};
+  var revert={status:it.status,shipPattern:it.shipPattern,prices:it.prices,home:it.home,shipCheck:it.shipCheck,listDate:it.listDate,saleDate:it.saleDate,buyDate:it.buyDate,note:it.note};
   if(editing){revert.category=it.category;revert.subCategory=it.subCategory;revert.maker=it.maker;revert.name=it.name;revert.cost=it.cost;revert.condition=it.condition;revert.opCondition=it.opCondition;revert.staff=it.staff;revert.accessory=it.accessory;}
   it.status=patch.status;it.shipPattern=patch.shipPattern;it.home=patch.home;it.shipCheck=patch.shipCheck;it.prices=prices;
+  if(editing){if(patch.buyDate!==undefined)it.buyDate=patch.buyDate;if(patch.listDate!==undefined)it.listDate=patch.listDate;if(patch.saleDate!==undefined)it.saleDate=patch.saleDate;}
   if(patch.status==='販売中'&&!it.listDate)it.listDate=todayStr();if(patch.status==='売却済み'&&!it.saleDate)it.saleDate=todayStr();
   if(editing){it.category=patch.category;it.subCategory=patch.subCategory;it.maker=patch.maker;it.name=patch.name;it.cost=patch.cost;it.condition=patch.condition;it.opCondition=patch.opCondition;it.staff=patch.staff;it.accessory=patch.accessory;}
   var _n=row.querySelector('.e-note');if(_n)it.note=_n.value;computeProfits(it);logAction('編集',id,it.name,'在庫を更新',revert);openSet[id]=true;save();renderManage();refreshOpenLogs();toast('保存しました');}
