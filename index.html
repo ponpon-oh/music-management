@@ -183,7 +183,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-18a</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-18b</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -931,7 +931,7 @@ function pushCloud(){if(!CU())return;var rev=Date.now();var payload=JSON.stringi
 function pullCloud(force){if(!CU())return;var cb='__cb'+Date.now()+Math.floor(Math.random()*1000),s=document.createElement('script');
   var timer=setTimeout(function(){cleanup();var st=document.getElementById('cloudStatus');if(st)st.textContent='⚠ 応答なし（URL/デプロイ設定=全員 を確認）';},15000);
   function cleanup(){clearTimeout(timer);try{delete window[cb];}catch(e){window[cb]=undefined;}if(s.parentNode)s.parentNode.removeChild(s);}
-  window[cb]=function(resp){cleanup();var st=document.getElementById('cloudStatus');try{if(resp&&resp.error){if(st)st.textContent='⚠ 合言葉が違います';return;}if(resp&&resp.data){var remote=JSON.parse(resp.data);var rrev=Number(resp.rev||remote.rev||0);if(force||rrev>(state.rev||0)){var keep={cloudUrl:state.cloudUrl,cloudSecret:state.cloudSecret,lineDirect:state.lineDirect};state=normalize(remote);state.rev=rrev;Object.assign(state,keep);localStorage.setItem(KEY,JSON.stringify(state));rebuildAll();setSync('☁ 最新取得 '+new Date().toLocaleTimeString('ja-JP'));if(st)st.textContent='✅ 接続OK（同期中）';}else if(st){st.textContent='✅ 接続OK（既に最新）';}}else{pushCloud();if(st)st.textContent='✅ 接続OK（この端末のデータで開始）';}}catch(e){if(st)st.textContent='⚠ 解析エラー';}};
+  window[cb]=function(resp){cleanup();var st=document.getElementById('cloudStatus');try{if(resp&&resp.error){if(st)st.textContent='⚠ 合言葉が違います';return;}if(resp&&resp.data){var remote=JSON.parse(resp.data);var rrev=Number(resp.rev||remote.rev||0);if(force||rrev>(state.rev||0)){var keep={cloudUrl:state.cloudUrl,cloudSecret:state.cloudSecret,lineDirect:state.lineDirect};state=normalize(remote);state.rev=rrev;Object.assign(state,keep);localStorage.setItem(KEY,JSON.stringify(state));rebuildAll();setSync('☁ 最新取得 '+new Date().toLocaleTimeString('ja-JP'));if(st)st.textContent='✅ 接続OK（同期中）';}else{setSync('☁ 同期済（既に最新） '+new Date().toLocaleTimeString('ja-JP'));if(st)st.textContent='✅ 接続OK（既に最新）';}}else{pushCloud();setSync('☁ この端末のデータで開始');if(st)st.textContent='✅ 接続OK（この端末のデータで開始）';}}catch(e){setSync('⚠ 解析エラー');if(st)st.textContent='⚠ 解析エラー';}};
   s.onerror=function(){cleanup();var st=document.getElementById('cloudStatus');if(st)st.textContent='⚠ 取得失敗（URL/デプロイ設定を確認）';setSync('⚠ 取得失敗');};
   s.src=CU()+(CU().indexOf('?')>=0?'&':'?')+'callback='+cb+'&action=load&secret='+encodeURIComponent(CS())+'&t='+Date.now();
   document.body.appendChild(s);}
