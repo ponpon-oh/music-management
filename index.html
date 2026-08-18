@@ -183,7 +183,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-14a</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-18a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -919,7 +919,15 @@ function resizeImage(file,max,q){return new Promise(function(res){var rd=new Fil
 
 /* ---- 同期（裏側） ---- */
 function schedulePush(){if(!CU())return;if(_pushTimer)clearTimeout(_pushTimer);_pushTimer=setTimeout(pushCloud,1200);}
-function pushCloud(){if(!CU())return;state.rev=Date.now();var body='action=save&secret='+encodeURIComponent(CS())+'&rev='+state.rev+'&data='+encodeURIComponent(JSON.stringify(state));try{fetch(CU(),{method:'POST',mode:'no-cors',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:body});setSync('☁ 保存済 '+new Date().toLocaleTimeString('ja-JP'));}catch(e){setSync('⚠ 同期失敗');}}
+function pushCloud(){if(!CU())return;var rev=Date.now();var payload=JSON.stringify(Object.assign({},state,{rev:rev}));setSync('☁ 保存中…');
+  fetch(CU(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'save',secret:CS(),data:payload})})
+    .then(function(res){return res.json();})
+    .then(function(j){
+      if(j&&j.ok){state.rev=rev;localStorage.setItem(KEY,JSON.stringify(state));setSync('☁ 保存済 '+new Date().toLocaleTimeString('ja-JP'));}
+      else{setSync('⚠ 保存失敗（'+((j&&j.error)||'不明')+'）');}
+    })
+    .catch(function(e){setSync('⚠ 同期失敗（送信できませんでした・再試行してください）');});
+}
 function pullCloud(force){if(!CU())return;var cb='__cb'+Date.now()+Math.floor(Math.random()*1000),s=document.createElement('script');
   var timer=setTimeout(function(){cleanup();var st=document.getElementById('cloudStatus');if(st)st.textContent='⚠ 応答なし（URL/デプロイ設定=全員 を確認）';},15000);
   function cleanup(){clearTimeout(timer);try{delete window[cb];}catch(e){window[cb]=undefined;}if(s.parentNode)s.parentNode.removeChild(s);}
