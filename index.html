@@ -183,7 +183,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-18c</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-18d</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -929,13 +929,46 @@ function pushCloud(){if(!CU())return;var rev=Date.now();var slim=Object.assign({
     })
     .catch(function(e){setSync('⚠ 同期失敗（送信できませんでした・再試行してください）');});
 }
-function pullCloud(force){if(!CU())return;var cb='__cb'+Date.now()+Math.floor(Math.random()*1000),s=document.createElement('script');
-  var timer=setTimeout(function(){cleanup();var st=document.getElementById('cloudStatus');if(st)st.textContent='⚠ 応答なし（URL/デプロイ設定=全員 を確認）';},15000);
-  function cleanup(){clearTimeout(timer);try{delete window[cb];}catch(e){window[cb]=undefined;}if(s.parentNode)s.parentNode.removeChild(s);}
-  window[cb]=function(resp){cleanup();var st=document.getElementById('cloudStatus');try{if(resp&&resp.error){if(st)st.textContent='⚠ 合言葉が違います';return;}if(resp&&resp.data){var remote=JSON.parse(resp.data);var rrev=Number(resp.rev||remote.rev||0);if(force||rrev>(state.rev||0)){var keep={cloudUrl:state.cloudUrl,cloudSecret:state.cloudSecret,lineDirect:state.lineDirect};state=normalize(remote);state.rev=rrev;Object.assign(state,keep);localStorage.setItem(KEY,JSON.stringify(state));rebuildAll();setSync('☁ 最新取得 '+new Date().toLocaleTimeString('ja-JP'));if(st)st.textContent='✅ 接続OK（同期中）';}else{setSync('☁ 同期済（既に最新） '+new Date().toLocaleTimeString('ja-JP'));if(st)st.textContent='✅ 接続OK（既に最新）';}}else{pushCloud();setSync('☁ この端末のデータで開始');if(st)st.textContent='✅ 接続OK（この端末のデータで開始）';}}catch(e){setSync('⚠ 解析エラー');if(st)st.textContent='⚠ 解析エラー';}};
-  s.onerror=function(){cleanup();var st=document.getElementById('cloudStatus');if(st)st.textContent='⚠ 取得失敗（URL/デプロイ設定を確認）';setSync('⚠ 取得失敗');};
-  s.src=CU()+(CU().indexOf('?')>=0?'&':'?')+'callback='+cb+'&action=load&secret='+encodeURIComponent(CS())+'&t='+Date.now();
-  document.body.appendChild(s);}
+function pullCloud(force){
+  if(!CU())return;
+  var st=document.getElementById('cloudStatus');
+  if(st)st.textContent='読込中…';
+  var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
+  var timer=setTimeout(function(){if(ctrl)ctrl.abort();},20000);
+  var url=CU()+(CU().indexOf('?')>=0?'&':'?')+'action=load&secret='+encodeURIComponent(CS())+'&t='+Date.now();
+  fetch(url,{signal:ctrl?ctrl.signal:undefined})
+    .then(function(res){return res.json();})
+    .then(function(resp){
+      clearTimeout(timer);
+      if(resp&&resp.error){setSync('⚠ 合言葉が違います');if(st)st.textContent='⚠ 合言葉が違います';return;}
+      if(resp&&resp.data){
+        var remote;
+        try{remote=JSON.parse(resp.data);}
+        catch(e){setSync('⚠ 解析エラー');if(st)st.textContent='⚠ 解析エラー';return;}
+        var rrev=Number(resp.rev||remote.rev||0);
+        if(force||rrev>(state.rev||0)){
+          var keep={cloudUrl:state.cloudUrl,cloudSecret:state.cloudSecret,lineDirect:state.lineDirect};
+          state=normalize(remote);state.rev=rrev;Object.assign(state,keep);
+          localStorage.setItem(KEY,JSON.stringify(state));
+          rebuildAll();
+          setSync('☁ 最新取得 '+new Date().toLocaleTimeString('ja-JP'));
+          if(st)st.textContent='✅ 接続OK（同期中）';
+        }else{
+          setSync('☁ 同期済（既に最新） '+new Date().toLocaleTimeString('ja-JP'));
+          if(st)st.textContent='✅ 接続OK（既に最新）';
+        }
+      }else{
+        pushCloud();
+        setSync('☁ この端末のデータで開始');
+        if(st)st.textContent='✅ 接続OK（この端末のデータで開始）';
+      }
+    })
+    .catch(function(e){
+      clearTimeout(timer);
+      setSync('⚠ 取得失敗（通信エラー）');
+      if(st)st.textContent='⚠ 取得失敗（URL/デプロイ設定を確認）';
+    });
+}
 function startPoll(){if(_pollStarted)return;_pollStarted=true;setInterval(function(){if(CU())pullCloud(false);},15000);}
 
 /* ---- クラウド設定UI ---- */
