@@ -183,7 +183,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-18b</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-18c</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -919,7 +919,8 @@ function resizeImage(file,max,q){return new Promise(function(res){var rd=new Fil
 
 /* ---- 同期（裏側） ---- */
 function schedulePush(){if(!CU())return;if(_pushTimer)clearTimeout(_pushTimer);_pushTimer=setTimeout(pushCloud,1200);}
-function pushCloud(){if(!CU())return;var rev=Date.now();var payload=JSON.stringify(Object.assign({},state,{rev:rev}));setSync('☁ 保存中…');
+function syncSafeItems_(){return state.items.map(function(it){if(it.photo&&it.photo.indexOf('data:')===0){var c=Object.assign({},it);c.photo='';return c;}return it;});}
+function pushCloud(){if(!CU())return;var rev=Date.now();var slim=Object.assign({},state,{rev:rev,items:syncSafeItems_()});var payload=JSON.stringify(slim);setSync('☁ 保存中…');
   fetch(CU(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'save',secret:CS(),data:payload})})
     .then(function(res){return res.json();})
     .then(function(j){
