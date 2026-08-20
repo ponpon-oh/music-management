@@ -183,7 +183,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-18d</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-19a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -202,6 +202,7 @@
     <div class="card"><h2>発送方法</h2><div id="setMethod"></div><button class="btn ghost sm" onclick="addSetRow('method')">＋行</button><button class="btn sm" onclick="saveSet('ship_methods')">保存</button></div>
     <div class="card"><h2>送料パターン</h2><p class="muted">名前＋金額＋対応発送方法。</p><div id="setPattern"></div><button class="btn ghost sm" onclick="addSetRow('pattern')">＋行</button><button class="btn sm" onclick="saveSet('ship_patterns')">保存</button></div>
     <div class="card"><h2>カテゴリ別の初期値（仕入れ時に自動入力）</h2><p class="muted">カテゴリを選ぶと、送料パターン・自宅保管・送料確認がこの値で入ります。</p><div id="setCatDef"></div><button class="btn ghost sm" onclick="addSetRow('catdef')">＋行</button><button class="btn sm" onclick="saveSet('cat_defaults')">保存</button></div>
+    <div class="card"><h2>販路ごとの送料パターン初期値</h2><p class="muted">出荷依頼で販路を選ぶと、送料パターンがこの値に自動で切り替わります。</p><div id="setChDef"></div><button class="btn ghost sm" onclick="addSetRow('chdef')">＋行</button><button class="btn sm" onclick="saveSet('ch_ship_default')">保存</button></div>
     <div class="card"><h2>動作状態 → ステータスの初期値</h2><p class="muted">仕入れ時にその動作状態を選ぶと、ステータスがこの値で入ります。</p><div id="setOpStatus"></div><button class="btn ghost sm" onclick="addSetRow('opstatus')">＋行</button><button class="btn sm" onclick="saveSet('op_status')">保存</button></div>
     <div class="card"><h2>動作状態</h2><div id="setOpcond"></div><button class="btn ghost sm" onclick="addSetRow('opcond')">＋行</button><button class="btn sm" onclick="saveSet('op_conditions')">保存</button></div>
     <div class="card"><h2>ステータス</h2><p class="muted">※「売却済み」は集計の予約名。残してください。</p><div id="setStatus"></div><button class="btn ghost sm" onclick="addSetRow('status')">＋行</button><button class="btn sm" onclick="saveSet('statuses')">保存</button></div>
@@ -473,6 +474,7 @@ function syncField(catSel){
 }
 function catDefaultOf(cat){var a=(CFG&&CFG.catDefaults)||[];for(var i=0;i<a.length;i++){if(a[i].category===cat)return a[i];}return null;}
 function statusFromOp(op){var a=(CFG&&CFG.opStatusMap)||[];for(var i=0;i<a.length;i++){if(a[i].op===op)return a[i].status;}return '';}
+function shipDefaultForChannel(ch){var a=(CFG&&CFG.channelShipDefault)||[];for(var i=0;i<a.length;i++){if(a[i].channel===ch)return a[i].shipPattern;}return '';}
 function defaultStatus(){var st=(CFG&&CFG.statuses)||[];return st.indexOf('未販売')>=0?'未販売':(st[0]||'');}
 function syncOpStatus(sel){if(!sel)return;var row=sel.closest('.purchase-row'),el=row?row.querySelector('.b-status'):null;if(!el)return;el.value=statusFromOp(sel.value)||defaultStatus();}
 async function submitPurchase(){
@@ -614,7 +616,9 @@ function selShip(id){SEL.ship=STOCK.filter(function(x){return x.id===id;})[0];va
   shipPatternChange();shipChannelChange();$('shipPanel').scrollIntoView({behavior:'smooth',block:'start'});}
 function closeShip(){var el=$('shipPanel');if(el)el.style.display='none';SEL.ship=null;}
 function shipPatternChange(){$('shipMethodAuto').value=patternMethod($('shipPattern').value)||'（未設定）';calcShip();}
-function shipChannelChange(){var x=SEL.ship;if(!x)return;var ch=$('shipChannel').value;$('shipPrice').value=(x.prices&&x.prices[ch])?x.prices[ch]:'';calcShip();}
+function shipChannelChange(){var x=SEL.ship;if(!x)return;var ch=$('shipChannel').value;$('shipPrice').value=(x.prices&&x.prices[ch])?x.prices[ch]:'';
+  var dp=shipDefaultForChannel(ch);if(dp)$('shipPattern').value=dp;
+  calcShip();}
 function calcShip(){var x=SEL.ship;if(!x)return;var ch=$('shipChannel').value,pat=$('shipPattern').value,price=Number($('shipPrice').value)||0,ship=patternFee(pat),p=calcProfit(price,x.cost,feeOf(ch),ship);
   $('shipCalc').innerHTML='<div class="msgbox">売価 '+yen(price)+'円 − 仕入 '+yen(x.cost)+'円 − 手数料'+feeOf(ch)+'%（'+yen(Math.round(price*feeOf(ch)/100))+'円） − 送料'+yen(ship)+'円<br><b>利益 '+profitHtml(p)+'</b></div>';}
 async function doShip(){var x=SEL.ship;if(!x)return;var ch=$('shipChannel').value,pat=$('shipPattern').value,price=Number($('shipPrice').value)||0;
@@ -659,12 +663,14 @@ function renderSettings(){
   $('setOpcond').innerHTML=CFG.opConditions.map(function(s){return setRow('opcond',s,(CFG.opNoteTargets||[]).indexOf(s)>=0);}).join('');
   $('setCatDef').innerHTML=(CFG.catDefaults||[]).map(function(d){return setRow('catdef',d.category,d.shipPattern,d);}).join('');
   $('setOpStatus').innerHTML=(CFG.opStatusMap||[]).map(function(d){return setRow('opstatus',d.op,d.status);}).join('');
+  $('setChDef').innerHTML=(CFG.channelShipDefault||[]).map(function(d){return setRow('chdef',d.channel,d.shipPattern);}).join('');
   $('setStatus').innerHTML=CFG.statuses.map(function(s){return setRow('status',s);}).join('');
   $('setPColor').innerHTML=CFG.periodColors.map(function(r){return setRow('pcolor',r.min,(r.max===99999?'':r.max),r.color);}).join('');
 }
 function setRow(kind,a,b,c){var del='<button class="btn danger sm" onclick="this.parentNode.remove()">×</button>';
   if(kind==='catdef')return '<div class="setrow"><select class="cd-cat">'+opt(catNames(),a)+'</select><select class="cd-ship"><option value=""></option>'+opt(CFG.shipPatterns.map(function(p){return p.name;}),b)+'</select><label class="switch" style="flex:0 0 auto;white-space:nowrap"><input type="checkbox" class="cd-home"'+(c&&c.home?' checked':'')+'> 🏠自宅保管</label><label class="switch" style="flex:0 0 auto;white-space:nowrap"><input type="checkbox" class="cd-chk"'+(c&&c.shipCheck?' checked':'')+'> 📮送料確認</label>'+del+'</div>';
   if(kind==='opstatus')return '<div class="setrow"><select class="os-op">'+opt(CFG.opConditions,a)+'</select><select class="os-st">'+opt(CFG.statuses,b)+'</select>'+del+'</div>';
+  if(kind==='chdef')return '<div class="setrow"><select class="chd-ch">'+opt(channelNames(),a)+'</select><select class="chd-ship"><option value=""></option>'+opt(CFG.shipPatterns.map(function(p){return p.name;}),b)+'</select>'+del+'</div>';
   if(kind==='opcond')return '<div class="setrow"><input placeholder="名前" value="'+esc(a||'')+'"><label class="switch" style="flex:0 0 auto;white-space:nowrap"><input type="checkbox" class="op-note"'+(b?' checked':'')+'> 備考へ転記</label>'+del+'</div>';
   if(kind==='staff'||kind==='method'||kind==='status')return '<div class="setrow"><input placeholder="名前" value="'+esc(a||'')+'">'+del+'</div>';
   if(kind==='subcat')return '<div class="setrow"><select style="max-width:170px">'+opt(catNames(),a)+'</select><input placeholder="小カテゴリ名" value="'+esc(b||'')+'">'+del+'</div>';
@@ -674,7 +680,7 @@ function setRow(kind,a,b,c){var del='<button class="btn danger sm" onclick="this
   var ph=(kind==='cat')?['カテゴリ名','プレフィックス']:['販路名','手数料率(%)'];
   return '<div class="setrow"><input placeholder="'+ph[0]+'" value="'+esc(a||'')+'"><input placeholder="'+ph[1]+'" value="'+esc(b==null?'':b)+'" style="max-width:140px">'+del+'</div>';
 }
-function addSetRow(kind){var m={cat:'setCat',subcat:'setSub',catfield:'setCatField',staff:'setStaff',ch:'setCh',method:'setMethod',pattern:'setPattern',opcond:'setOpcond',status:'setStatus',pcolor:'setPColor',catdef:'setCatDef',opstatus:'setOpStatus'};$(m[kind]).insertAdjacentHTML('beforeend',setRow(kind,'','',''));}
+function addSetRow(kind){var m={cat:'setCat',subcat:'setSub',catfield:'setCatField',staff:'setStaff',ch:'setCh',method:'setMethod',pattern:'setPattern',opcond:'setOpcond',status:'setStatus',pcolor:'setPColor',catdef:'setCatDef',opstatus:'setOpStatus',chdef:'setChDef'};$(m[kind]).insertAdjacentHTML('beforeend',setRow(kind,'','',''));}
 async function saveSet(table){
   var conf={categories:{el:'setCat',b:function(i,s){return {name:i[0].value.trim(),prefix:i[1].value.trim()};}},
     subcategories:{el:'setSub',b:function(i,s){return {parent:s[0]?s[0].value:'',name:i[0].value.trim()};}},
@@ -897,6 +903,7 @@ function defaultState(){return {rev:0,logSeq:0,counters:{},items:[],logs:[],deli
   opNoteTargets:['要：整備'],
   catDefaults:[],
   opStatusMap:[],
+  channelShipDefault:[],
   periodColors:[{min:0,max:30,color:'赤'},{min:31,max:60,color:'橙'},{min:61,max:90,color:'黄'},{min:91,max:3650,color:'グレー'}]
 }};}
 function normalize(o){var d=defaultState();o=o||{};o.settings=Object.assign({},d.settings,o.settings||{});['items','logs','delist'].forEach(function(k){if(!Array.isArray(o[k]))o[k]=d[k];});o.counters=o.counters||{};o.logSeq=o.logSeq||0;o.rev=o.rev||0;o.cloudUrl=o.cloudUrl||'';o.cloudSecret=o.cloudSecret||'';o.lineDirect=!!o.lineDirect;Object.keys(d.settings).forEach(function(k){if(!Array.isArray(o.settings[k]))o.settings[k]=d.settings[k];});return o;}
@@ -909,7 +916,7 @@ function buildCFG(){var s=state.settings;var subs={};s.subcategories.forEach(fun
   var fields={};s.categoryFields.forEach(function(x){(fields[x.category]=fields[x.category]||[]).push({label:x.label,options:String(x.options||'').split(',').map(function(t){return t.trim();}).filter(Boolean)});});
   return {categories:s.categories.map(function(c){return {'カテゴリ名':c.name,'IDプレフィックス':c.prefix};}),subcategories:subs,categoryFields:fields,staff:s.staff.slice(),
     channels:s.channels.map(function(c){return {'販路名':c.name,'手数料率(%)':Number(c.fee)};}),shipMethodNames:s.shipMethods.slice(),
-    shipPatterns:s.shipPatterns.map(function(p){return {name:p.name,amount:Number(p.amount)||0,method:p.method};}),statuses:s.statuses.slice(),opConditions:s.opConditions.slice(),opNoteTargets:(s.opNoteTargets||[]).slice(),catDefaults:(s.catDefaults||[]).slice(),opStatusMap:(s.opStatusMap||[]).slice(),
+    shipPatterns:s.shipPatterns.map(function(p){return {name:p.name,amount:Number(p.amount)||0,method:p.method};}),statuses:s.statuses.slice(),opConditions:s.opConditions.slice(),opNoteTargets:(s.opNoteTargets||[]).slice(),catDefaults:(s.catDefaults||[]).slice(),opStatusMap:(s.opStatusMap||[]).slice(),channelShipDefault:(s.channelShipDefault||[]).slice(),
     periodColors:s.periodColors.map(function(r){return {min:Number(r.min)||0,max:(r.max==null||r.max===''?99999:Number(r.max)),color:r.color};}),conditions:CONDITIONS};}
 function rebuildAll(){CFG=buildCFG();STOCK=state.items;STOCK.forEach(function(x){if(!x.listings||typeof x.listings!=='object')x.listings={};});STOCK.forEach(computeProfits);fillSelectors();renderDelist();renderManage();renderShipList();renderDash(dashFromStock());if(document.getElementById('v-settings').classList.contains('active'))renderSettings();refreshOpenLogs();}
 function nextId(prefix){var mx=state.counters[prefix]||0;var re=new RegExp('^'+prefix+'(\\d+)$');state.items.forEach(function(x){var m=re.exec(x.id);if(m)mx=Math.max(mx,parseInt(m[1],10));});var n=mx+1;state.counters[prefix]=n;return prefix+('0000'+n).slice(-4);}
@@ -1015,7 +1022,7 @@ function saveItem(id){
       var nv=(v==='')?'':((/^(-|なし|出品なし|無し)$/.test(v))?NOLIST:v);
       if((it.listings[ch]||'')!==nv)_chg=true;
       if(nv==='')delete it.listings[ch];else it.listings[ch]=nv;});
-    if(_chg)it.listingsAt=todayStr();}computeProfits(it);logAction('編集',id,it.name,'在庫を更新',revert);openSet[id]=true;save();renderManage();refreshOpenLogs();toast('保存しました');}
+    if(_chg)it.listingsAt=todayStr();}computeProfits(it);logAction('編集',id,it.name,'在庫を更新',revert);delete openSet[id];save();renderManage();refreshOpenLogs();toast('保存しました');}
 
 function pickPhoto(id){photoTargetId=id;document.getElementById('photoPicker').click();}
 async function doPhotoUpload(id,file){toast('写真を処理中…');var dataUrl=await resizeImage(file,1000,0.82);var it=state.items.filter(function(x){return x.id===id;})[0];if(!it)return;
@@ -1072,6 +1079,12 @@ function saveSet(table){
     srows.forEach(function(r){var o=r.querySelector('.os-op').value;if(!o)return;
       sv.push({op:o,status:r.querySelector('.os-st').value});});
     state.settings.opStatusMap=sv;save();CFG=buildCFG();fillSelectors();renderSettings();initBuy();toast('保存しました');return;
+  }
+  if(table==='ch_ship_default'){
+    var hrows=document.querySelectorAll('#setChDef .setrow'),hv=[];
+    hrows.forEach(function(r){var c=r.querySelector('.chd-ch').value;if(!c)return;
+      hv.push({channel:c,shipPattern:r.querySelector('.chd-ship').value});});
+    state.settings.channelShipDefault=hv;save();CFG=buildCFG();fillSelectors();renderSettings();toast('保存しました');return;
   }
   if(table==='op_conditions'){
     var orows=document.querySelectorAll('#setOpcond .setrow'),names=[],tgs=[];
