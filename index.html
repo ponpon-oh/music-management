@@ -38,6 +38,8 @@
   @media(max-width:640px){.kpis{grid-template-columns:1fr 1fr}}
   table{width:100%;border-collapse:collapse;font-size:13px} th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)} th{color:var(--sub);font-weight:600}
   .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;background:#eceff1;color:#607d8b}
+  .copyable{cursor:pointer;border-bottom:1px dashed currentColor;text-decoration:none}
+  .copyable:active{opacity:.6}
   .pill.未販売{background:#e0f2f1;color:#00695c}.pill.販売中{background:#ffcdd2;color:#c62828}.pill.売却済み{background:#e0e0e0;color:#616161}
   .pill.ステイ{background:#e1bee7;color:#6a1b9a}.pill.【修理】{background:#f9a825;color:#4e342e}
   .pill.要：修理,.pill.要：掃除,.pill.要：確認{background:#fff9c4;color:#f57f17}
@@ -183,7 +185,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-19a</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-08-23a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -232,6 +234,12 @@ var COLOR_KEYS=['赤','橙','黄','緑','青','紫','グレー'];
 
 function $(id){return document.getElementById(id);}
 function toast(m){var t=$('toast');t.textContent=m;t.classList.add('show');clearTimeout(t._t);t._t=setTimeout(function(){t.classList.remove('show')},2600);}
+function copyText(el){var t=(el&&el.textContent)||'';if(!t)return;
+  if(navigator.clipboard&&navigator.clipboard.writeText){navigator.clipboard.writeText(t).then(function(){toast('コピーしました：'+t);}).catch(function(){fallbackCopy(t);});}
+  else{fallbackCopy(t);}}
+function fallbackCopy(t){var ta=document.createElement('textarea');ta.value=t;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.focus();ta.select();
+  try{document.execCommand('copy');toast('コピーしました：'+t);}catch(e){toast('コピーに失敗しました');}
+  document.body.removeChild(ta);}
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function yen(n){return (Number(n)||0).toLocaleString('ja-JP');}
 function opt(a,v){return a.map(function(x){return '<option'+(x===v?' selected':'')+'>'+esc(x)+'</option>';}).join('');}
@@ -527,7 +535,7 @@ function renderManage(){
     var pin=CFG.channels.map(function(c){var n=c['販路名'];return '<div class="f pf"><label>'+esc(n)+'価格</label><input type="number" inputmode="numeric" class="e-price" data-ch="'+esc(n)+'" value="'+(x.prices[n]||'')+'" oninput="recalc(\''+id+'\')"></div>';}).join('');
     return '<div class="item" id="it-'+id+'">'
       +'<div class="ph" '+phS+' onclick="pickPhoto(\''+id+'\')">'+phI+'</div>'
-      +'<div class="head" onclick="toggleItem(\''+id+'\')" style="flex:1;min-width:150px;cursor:pointer"><div class="nm" style="font-size:22px;font-weight:600;line-height:1.35"><span style="font-family:monospace;font-size:15px;color:var(--brand)">'+id+'</span><span style="font-size:14px;color:var(--sub);font-weight:600"> ・ '+(x.maker?esc(x.maker)+' ':'')+'</span>'+esc(x.name)+'</div><div style="margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="pill bigpill '+esc(x.status)+'">'+esc(x.status)+'</span>'+(per!=null?'<span style="background:'+bg+';color:'+fg+';padding:3px 10px;border-radius:10px;font-weight:800;white-space:nowrap">'+(x.status==='販売中'?'販売中 ':'')+per+'日</span>':'')+'</div></div>'
+      +'<div class="head" style="flex:1;min-width:150px"><div class="nm" style="font-size:22px;font-weight:600;line-height:1.35"><span onclick="toggleItem(\''+id+'\')" style="cursor:pointer;font-family:monospace;font-size:15px;color:var(--brand)">'+id+'</span><span style="font-size:14px;color:var(--sub);font-weight:600"> ・ '+(x.maker?'<span class="copyable" onclick="event.stopPropagation();copyText(this)" title="タップでメーカー名をコピー">'+esc(x.maker)+'</span> ':'')+'</span><span class="copyable" onclick="event.stopPropagation();copyText(this)" title="タップで商品名をコピー">'+esc(x.name)+'</span></div><div onclick="toggleItem(\''+id+'\')" style="cursor:pointer;margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="pill bigpill '+esc(x.status)+'">'+esc(x.status)+'</span>'+(per!=null?'<span style="background:'+bg+';color:'+fg+';padding:3px 10px;border-radius:10px;font-weight:800;white-space:nowrap">'+(x.status==='販売中'?'販売中 ':'')+per+'日</span>':'')+'</div></div>'
       +(x.status!=='売却済み'?'<button class="btn accent sm" onclick="selShip(\''+id+'\')">🚚出荷依頼</button>':'')
       +'<button class="btn ghost sm" id="caret-'+id+'" onclick="toggleItem(\''+id+'\')">'+(openSet[x.id]?'▲':'▼')+'</button>'
       +'<div class="body" id="body-'+id+'" style="display:'+(openSet[x.id]?'block':'none')+';width:100%">'
