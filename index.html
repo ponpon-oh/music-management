@@ -185,7 +185,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-09-12a</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-09-20a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -622,12 +622,12 @@ function selShip(id){SEL.ship=STOCK.filter(function(x){return x.id===id;})[0];va
   $('shipSel').innerHTML=homeAlert+'<div class="row" style="align-items:center"><div style="flex:0">'+(x.photo?'<img class="thumb" src="'+esc(x.photo)+'">':'')+'</div><div><b>'+esc(x.id)+'</b> '+esc(x.maker)+' '+esc(x.name)+'<br><span class="muted">仕入 '+yen(x.cost)+'円'+(x.listDate?' ・ 販売日 '+esc(x.listDate):'')+'</span></div></div>';
   $('shipPattern').value=x.shipPattern||'';
   var chs=channelNames();for(var i=0;i<chs.length;i++){if(x.prices&&x.prices[chs[i]]){$('shipChannel').value=chs[i];break;}}
-  shipPatternChange();shipChannelChange();$('shipPanel').scrollIntoView({behavior:'smooth',block:'start'});}
+  shipChannelChange();$('shipPanel').scrollIntoView({behavior:'smooth',block:'start'});}
 function closeShip(){var el=$('shipPanel');if(el)el.style.display='none';SEL.ship=null;}
 function shipPatternChange(){$('shipMethodAuto').value=patternMethod($('shipPattern').value)||'（未設定）';calcShip();}
 function shipChannelChange(){var x=SEL.ship;if(!x)return;var ch=$('shipChannel').value;$('shipPrice').value=(x.prices&&x.prices[ch])?x.prices[ch]:'';
   var dp=shipDefaultForChannel(ch);if(dp)$('shipPattern').value=dp;
-  calcShip();}
+  shipPatternChange();}
 function calcShip(){var x=SEL.ship;if(!x)return;var ch=$('shipChannel').value,pat=$('shipPattern').value,price=Number($('shipPrice').value)||0,ship=patternFee(pat),p=calcProfit(price,x.cost,feeOf(ch),ship);
   $('shipCalc').innerHTML='<div class="msgbox">売価 '+yen(price)+'円 − 仕入 '+yen(x.cost)+'円 − 手数料'+feeOf(ch)+'%（'+yen(Math.round(price*feeOf(ch)/100))+'円） − 送料'+yen(ship)+'円<br><b>利益 '+profitHtml(p)+'</b></div>';}
 async function doShip(){var x=SEL.ship;if(!x)return;var ch=$('shipChannel').value,pat=$('shipPattern').value,price=Number($('shipPrice').value)||0;
