@@ -75,7 +75,7 @@
   tr.anrow:hover{background:#f1f8f7}
   #shipPanel{border-color:var(--accent);box-shadow:0 2px 10px rgba(239,108,0,.12)}
   .axisbtns button{font-size:14px;padding:7px 16px}
-  .acc-table-wrap{overflow-x:auto}.acc-table-wrap table{min-width:690px}
+  .acc-table-wrap{overflow-x:auto}.acc-table-wrap table{min-width:780px}
   .acc-line{display:grid;grid-template-columns:minmax(180px,2fr) 90px 125px 120px;gap:8px;align-items:end;margin:8px 0;padding:10px;border:1px solid var(--line);border-radius:8px}
   .acc-line label{margin-top:0}.acc-line .acc-stock{font-size:12px;color:var(--sub);padding-bottom:10px}
   .acc-alert{background:#fff3e0;border:1px solid #ffcc80;border-radius:8px;padding:9px;margin:8px 0}
@@ -175,7 +175,7 @@
   </section>
 
   <section id="v-accessories" class="view">
-    <div class="card"><h2>🪛 付属品の数量在庫</h2><p class="muted">スタンド・ギグバッグ・ストラップ・チューナーなどを商品IDごとに管理します。色違いは別の商品IDで登録してください。同じ商品の仕入単価が変わった場合は、追加仕入れの単価を記録し、残っている在庫の平均仕入単価を更新します。</p><div id="accSummary" class="summary"></div><div id="accList" class="acc-table-wrap"></div></div>
+    <div class="card"><h2>🪛 付属品の数量在庫</h2><p class="muted">スタンド・ギグバッグ・ストラップ・チューナーなどを商品IDごとに管理します。色違いは別の商品IDで登録してください。同じ商品の仕入単価が変わった場合は、追加仕入れの単価を記録し、残っている在庫の平均仕入単価を更新します。</p><p class="muted">想定利益率＝（標準売価 − 平均仕入単価 − 標準売価の10％の手数料）÷ 標準売価。送料は含めません。実際の売上利益には販売時の販路手数料率を使います。</p><div id="accSummary" class="summary"></div><div id="accList" class="acc-table-wrap"></div></div>
     <div class="card"><h2>＋ 新しい付属品を登録</h2><div class="row">
       <div><label>商品ID</label><input id="accNewSku" placeholder="例：AC0005"></div>
       <div><label>種類</label><select id="accNewType"></select></div>
@@ -221,7 +221,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-09-30d</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-09-30e</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -932,13 +932,13 @@ function doneDelist(i){if(!state.delist)return;state.delist.splice(i,1);save();r
 
 /* ============ ローカルファースト データ層（デオドラント方式） ============ */
 var CLOUD_URL = '';            /* 使わなくてOK（アプリの設定画面から入力できます） */
-var CLOUD_SECRET = 'artery-music';
+var CLOUD_SECRET = '';
 var DEMO_MODE=new URLSearchParams(location.search).get('demo')==='1';
 var KEY=DEMO_MODE?'gakki_accessory_demo_v3':'gakki_state_v1';
 var CONDITIONS=['新品、未使用','未使用に近い','目立った傷や汚れなし','やや傷や汚れあり','傷や汚れあり','全体的に状態が悪い'];
 var state=null,_pushTimer=null,_pollStarted=false,_pushFailed=false,_retryTimer=null;
 function CU(){return DEMO_MODE?'':((state&&state.cloudUrl)||CLOUD_URL||'');}
-function CS(){return (state&&state.cloudSecret)||CLOUD_SECRET||'changeme';}
+function CS(){return (state&&state.cloudSecret)||CLOUD_SECRET||'';}
 
 function defaultState(){return {rev:0,logSeq:0,orderSeq:0,accessoryMoveSeq:0,counters:{},items:[],logs:[],delist:[],accessorySkus:[],accessoryMovements:[],orders:[],cloudUrl:'',cloudSecret:'',lineDirect:false,settings:{
   categories:[{name:'エフェクター',prefix:'E'},{name:'ギター',prefix:'G'},{name:'ベース',prefix:'B'}],
@@ -978,9 +978,9 @@ function applyRevert(it,rev){Object.keys(rev).forEach(function(k){it[k]=rev[k];}
 function resizeImage(file,max,q){return new Promise(function(res){var rd=new FileReader();rd.onload=function(){var img=new Image();img.onload=function(){var w=img.width,h=img.height;if(w>max||h>max){if(w>h){h=Math.round(h*max/w);w=max;}else{w=Math.round(w*max/h);h=max;}}var cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0,w,h);res(cv.toDataURL('image/jpeg',q));};img.onerror=function(){res(rd.result);};img.src=rd.result;};rd.readAsDataURL(file);});}
 
 /* ---- 同期（裏側） ---- */
-function schedulePush(){if(!CU())return;if(_pushTimer)clearTimeout(_pushTimer);_pushTimer=setTimeout(pushCloud,1200);}
+function schedulePush(){if(!CU()||!CS())return;if(_pushTimer)clearTimeout(_pushTimer);_pushTimer=setTimeout(pushCloud,1200);}
 function syncSafeItems_(){return state.items.map(function(it){if(it.photo&&it.photo.indexOf('data:')===0){var c=Object.assign({},it);c.photo='';return c;}return it;});}
-function pushCloud(){if(!CU())return;if(_retryTimer){clearTimeout(_retryTimer);_retryTimer=null;}var rev=Date.now();var slim=Object.assign({},state,{rev:rev,items:syncSafeItems_()});var payload=JSON.stringify(slim);setSync('☁ 保存中…');
+function pushCloud(){if(!CU()||!CS()){if(CU())setSync('⚠ 合言葉を設定してください（端末内データは保持）');return;}if(_retryTimer){clearTimeout(_retryTimer);_retryTimer=null;}var rev=Date.now();var slim=Object.assign({},state,{rev:rev,items:syncSafeItems_()});var payload=JSON.stringify(slim);setSync('☁ 保存中…');
   fetch(CU(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'save',secret:CS(),data:payload})})
     .then(function(res){return res.json();})
     .then(function(j){
@@ -990,7 +990,7 @@ function pushCloud(){if(!CU())return;if(_retryTimer){clearTimeout(_retryTimer);_
     .catch(function(e){_pushFailed=true;setSync('⚠ 同期失敗（送信できませんでした・自動で再試行します）');_retryTimer=setTimeout(pushCloud,5000);});
 }
 function pullCloud(force){
-  if(!CU())return;
+  if(!CU()||!CS()){if(CU()){setSync('⚠ 合言葉を設定してください（端末内データは保持）');var missing=document.getElementById('cloudStatus');if(missing)missing.textContent='⚠ 合言葉を設定してください';}return;}
   var st=document.getElementById('cloudStatus');
   if(st)st.textContent='読込中…';
   var ctrl=(typeof AbortController!=='undefined')?new AbortController():null;
@@ -1038,7 +1038,7 @@ function saveCloudSettings(){state.cloudUrl=document.getElementById('cloudUrlInp
 function testCloud(){var st=document.getElementById('cloudStatus');state.cloudUrl=document.getElementById('cloudUrlInput').value.trim();state.cloudSecret=document.getElementById('cloudSecretInput').value.trim();if(!CU()){if(st)st.textContent='URLを入力してください';return;}if(st)st.textContent='テスト中…';pullCloud(true);}
 
 function initApp(){try{state=loadState();}catch(e){document.getElementById('app').style.display='none';document.getElementById('dataIntegrityError').style.display='block';return;}document.getElementById('app').style.display='block';if(DEMO_MODE){$('demoBanner').style.display='block';statusFilter=[];}rebuildAll();initBuy();fillCloudUI();
-  if(CU()){setSync('接続中…');pullCloud(true);startPoll();}else{setSync('端末内保存（同期オフ）');}}
+  if(CU()&&CS()){setSync('接続中…');pullCloud(true);startPoll();}else if(CU()){setSync('⚠ 合言葉を設定してください（端末内データは保持）');}else{setSync('端末内保存（同期オフ）');}}
 
 /* ---- 上書き：データ操作をローカル化 ---- */
 function loadAll(){if(CU())pullCloud(true);else rebuildAll();}
@@ -1398,12 +1398,15 @@ function saveAccessoryTypes(){var rows=Array.from($('setAccessoryTypes').querySe
   state.settings.accessoryTypes=names;save();renderAccessoryTypesSettings();renderAccessories();toast('付属品の種類を保存しました');}
 function findAccessory(sku){return (state.accessorySkus||[]).filter(function(x){return x.sku===sku;})[0]||null;}
 function validWhole(n,min){return Number.isInteger(Number(n))&&Number(n)>=min;}
+function accessoryExpectedMargin(price,cost){price=Number(price);cost=Number(cost);if(!Number.isFinite(price)||price<=0||!Number.isFinite(cost))return null;return Math.round((price-cost-Math.round(price*0.1))/price*1000)/10;}
+function accessoryMarginHtml(price,cost){var margin=accessoryExpectedMargin(price,cost);return margin==null?'—':'<b class="'+(margin<0?'neg':'')+'">'+margin.toFixed(1)+'%</b>';}
+function previewAccessoryMargin(inp){var row=inp.closest('tr'),s=row&&findAccessory(row.dataset.sku),cell=row&&row.querySelector('.acc-margin');if(s&&cell)cell.innerHTML=accessoryMarginHtml(inp.value,s.avgCost);}
 function renderAccessories(){if(!state||!$('accList'))return;
   var skus=state.accessorySkus||[],units=0,value=0,alerts=0;
   skus.forEach(function(s){units+=Number(s.qty)||0;value+=Math.round((Number(s.qty)||0)*(Number(s.avgCost)||0));if(Number(s.qty)<=Number(s.reorderPoint||0))alerts++;});
   $('accSummary').innerHTML='<span class="chip">商品数 <b>'+skus.length+'商品</b></span><span class="chip">在庫 <b>'+units+'点</b></span><span class="chip">在庫原価 <b>'+yen(value)+'円</b></span><span class="chip">発注目安以下 <b>'+alerts+'商品</b></span>';
-  $('accList').innerHTML=skus.length?'<table><tr><th>商品ID・商品名</th><th>種類</th><th>数量</th><th>平均仕入単価</th><th>標準売価</th><th>発注目安</th><th></th></tr>'+skus.map(function(s){var low=Number(s.qty)<=Number(s.reorderPoint||0);
-    return '<tr data-sku="'+esc(s.sku)+'"><td><b>'+esc(s.sku)+'</b><br>'+esc(s.name)+'</td><td>'+esc(s.type)+'</td><td><b class="'+(low?'neg':'')+'">'+yen(s.qty)+'点</b>'+(low?'<br><span class="muted">要発注</span>':'')+'</td><td>'+yen(s.avgCost)+'円</td><td><input class="acc-price" type="number" min="0" step="1" value="'+Number(s.price||0)+'" aria-label="'+esc(s.sku)+' 標準売価"></td><td><input class="acc-reorder" type="number" min="0" step="1" value="'+Number(s.reorderPoint||0)+'" aria-label="'+esc(s.sku)+' 発注目安"></td><td><button class="btn ghost sm" onclick="saveAccessorySku(\''+s.sku+'\')">保存</button></td></tr>';}).join('')+'</table>':'<p class="muted">付属品はまだありません。下のフォームから商品を登録してください。</p>';
+  $('accList').innerHTML=skus.length?'<table><tr><th>商品ID・商品名</th><th>種類</th><th>数量</th><th>平均仕入単価</th><th>標準売価</th><th>想定利益率<br><small>手数料10％</small></th><th>発注目安</th><th></th></tr>'+skus.map(function(s){var low=Number(s.qty)<=Number(s.reorderPoint||0);
+    return '<tr data-sku="'+esc(s.sku)+'"><td><b>'+esc(s.sku)+'</b><br>'+esc(s.name)+'</td><td>'+esc(s.type)+'</td><td><b class="'+(low?'neg':'')+'">'+yen(s.qty)+'点</b>'+(low?'<br><span class="muted">要発注</span>':'')+'</td><td>'+yen(s.avgCost)+'円</td><td><input class="acc-price" type="number" min="0" step="1" value="'+Number(s.price||0)+'" aria-label="'+esc(s.sku)+' 標準売価" oninput="previewAccessoryMargin(this)"></td><td class="acc-margin">'+accessoryMarginHtml(s.price,s.avgCost)+'</td><td><input class="acc-reorder" type="number" min="0" step="1" value="'+Number(s.reorderPoint||0)+'" aria-label="'+esc(s.sku)+' 発注目安"></td><td><button class="btn ghost sm" onclick="saveAccessorySku(\''+s.sku+'\')">保存</button></td></tr>';}).join('')+'</table>':'<p class="muted">付属品はまだありません。下のフォームから商品を登録してください。</p>';
   var typePick=$('accNewType'),currentType=typePick.value;typePick.innerHTML=accessoryTypeNames().map(function(t){return '<option value="'+esc(t)+'">'+esc(t)+'</option>';}).join('');if(accessoryTypeNames().indexOf(currentType)>=0)typePick.value=currentType;
   var pick=$('accAdjustSku'),selected=pick.value;pick.innerHTML=skus.map(function(s){return '<option value="'+esc(s.sku)+'">'+esc(s.sku+'｜'+s.name)+'</option>';}).join('');if(findAccessory(selected))pick.value=selected;
   $('accAdjustCost').value='';
@@ -1458,8 +1461,8 @@ function salesOfMain(x){var o=orderForMain(x.id),extra=o?(o.accessories||[]):[];
 function renderAccessoryAnalysis(items){var mains=items.filter(function(x){return x.category==='ギター'||x.category==='ベース';}),orders=mains.map(function(x){return orderForMain(x.id);}).filter(Boolean),attached=orders.filter(function(o){return (o.accessories||[]).length>0;}),lines=[];
   orders.forEach(function(o){(o.accessories||[]).forEach(function(a){lines.push(a);});});
   var revenue=lines.reduce(function(n,a){return n+Number(a.revenue||0);},0),profit=lines.reduce(function(n,a){return n+Number(a.profit||0);},0),units=lines.reduce(function(n,a){return n+Number(a.qty||0);},0),groups={};
-  lines.forEach(function(a){var g=groups[a.sku]||(groups[a.sku]={sku:a.sku,name:a.name,qty:0,revenue:0,profit:0});g.qty+=a.qty;g.revenue+=a.revenue;g.profit+=a.profit;});
-  $('accessoryAnalysis').innerHTML='<div class="card"><h2>🪛 付属品アップセル</h2><p class="muted">上の期間・絞り込みに一致するギター・ベースの注文を集計。売上・利益は上の総額にも含まれ、カテゴリ別集計は本体のカテゴリに含めます。平均販売日数は本体だけで計算します。</p><div class="kpis small"><div class="kpi sm"><div class="n">'+yen(units)+'点</div><div class="l">付属品販売数</div></div><div class="kpi sm blue"><div class="n">'+yen(revenue)+'円</div><div class="l">付属品売上</div></div><div class="kpi sm green"><div class="n">'+yen(profit)+'円</div><div class="l">付属品利益</div></div><div class="kpi sm orange"><div class="n">'+(mains.length?Math.round(attached.length/mains.length*1000)/10:0)+'%</div><div class="l">同梱率（'+attached.length+'/'+mains.length+'注文）</div></div></div><div class="acc-table-wrap" style="margin-top:12px"><table><tr><th>商品ID・商品名</th><th>販売数</th><th>売上</th><th>利益</th><th>送料</th></tr>'+Object.keys(groups).map(function(k){var g=groups[k];return '<tr><td>'+esc(g.sku+'｜'+g.name)+'</td><td>'+g.qty+'点</td><td>'+yen(g.revenue)+'円</td><td>'+profitHtml(g.profit)+'</td><td>0円</td></tr>';}).join('')+(lines.length?'':'<tr><td colspan="5" class="muted">この条件での付属品販売はありません。</td></tr>')+'</table></div></div>';}
+  lines.forEach(function(a){var g=groups[a.sku]||(groups[a.sku]={sku:a.sku,name:a.name,qty:0,revenue:0,fee:0,profit:0});g.qty+=a.qty;g.revenue+=a.revenue;g.fee+=Number(a.fee||0);g.profit+=a.profit;});
+  $('accessoryAnalysis').innerHTML='<div class="card"><h2>🪛 付属品アップセル</h2><p class="muted">上の期間・絞り込みに一致するギター・ベースの注文を集計。付属品利益には販売時に選んだ販路の手数料を反映し、送料は引きません。売上・利益は上の総額にも含まれ、カテゴリ別集計は本体のカテゴリに含めます。平均販売日数は本体だけで計算します。</p><div class="kpis small"><div class="kpi sm"><div class="n">'+yen(units)+'点</div><div class="l">付属品販売数</div></div><div class="kpi sm blue"><div class="n">'+yen(revenue)+'円</div><div class="l">付属品売上</div></div><div class="kpi sm green"><div class="n">'+yen(profit)+'円</div><div class="l">付属品利益</div></div><div class="kpi sm orange"><div class="n">'+(mains.length?Math.round(attached.length/mains.length*1000)/10:0)+'%</div><div class="l">同梱率（'+attached.length+'/'+mains.length+'注文）</div></div></div><div class="acc-table-wrap" style="margin-top:12px"><table><tr><th>商品ID・商品名</th><th>販売数</th><th>売上</th><th>販路手数料</th><th>利益</th><th>送料</th></tr>'+Object.keys(groups).map(function(k){var g=groups[k];return '<tr><td>'+esc(g.sku+'｜'+g.name)+'</td><td>'+g.qty+'点</td><td>'+yen(g.revenue)+'円</td><td>'+yen(g.fee)+'円</td><td>'+profitHtml(g.profit)+'</td><td>0円</td></tr>';}).join('')+(lines.length?'':'<tr><td colspan="6" class="muted">この条件での付属品販売はありません。</td></tr>')+'</table></div></div>';}
 function demoItem(id,category,maker,name,cost,price,status,listDate,saleDate,channel,profit,shipPattern){return {id:id,category:category,subCategory:category==='ベース'?'エレキベース':(category==='ギター'?'エレキギター':'歪み系'),maker:maker,name:name,condition:'目立った傷や汚れなし',opCondition:'完動品',accessory:'',staff:'担当A',cost:cost,buyDate:'2026/08/10',photo:'',status:status,listDate:listDate,shipPattern:shipPattern||'',prices:{'メルカリ':price},home:false,shipCheck:false,channel:channel||'',salePrice:status==='売却済み'?price:'',profit:status==='売却済み'?profit:'',shipDate:saleDate||'',saleDate:saleDate||'',note:'',listings:{}};}
 function demoState(){var d=defaultState();d.settings.shipPatterns.push({name:'大型宅急便',amount:1700,method:'宅急便'});d.settings.channelShipDefault=[{channel:'メルカリ',shipPattern:'大型宅急便'},{channel:'ヤフフリマ',shipPattern:'大型宅急便'}];
   d.items=[demoItem('G0001','ギター','Fender','Player Stratocaster',52000,79800,'売却済み','2026/08/15','2026/09/29','メルカリ',18120,'大型宅急便'),demoItem('B0001','ベース','Ibanez','SR500E',46000,69800,'売却済み','2026/08/20','2026/09/28','ヤフフリマ',19210,'大型宅急便'),demoItem('G0002','ギター','YAMAHA','REVSTAR RSE20',38000,59800,'販売中','2026/09/05','','','', '大型宅急便'),demoItem('B0002','ベース','Fender','Player Precision Bass',49500,73900,'販売中','2026/09/12','','','', '大型宅急便'),demoItem('E0001','エフェクター','BOSS','DS-1 Distortion',4000,8980,'販売中','2026/09/15','','','', '宅急便60')];
