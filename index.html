@@ -38,6 +38,7 @@
   @media(max-width:640px){.kpis{grid-template-columns:1fr 1fr}}
   table{width:100%;border-collapse:collapse;font-size:13px} th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)} th{color:var(--sub);font-weight:600}
   .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;background:#eceff1;color:#607d8b}
+  #unlistedBadge{border:0;cursor:pointer;padding:6px 10px;font-size:13px}
   .copyable{cursor:pointer;border-bottom:1px dashed currentColor;text-decoration:none}
   .copyable:active{opacity:.6}
   .pill.未販売{background:#e0f2f1;color:#00695c}.pill.販売中{background:#ffcdd2;color:#c62828}.pill.売却済み{background:#e0e0e0;color:#616161}
@@ -142,10 +143,12 @@
       <label class="switch" style="margin-top:10px"><input type="checkbox" id="showImg" onchange="renderManage()"> 🖼 画像を表示する</label>
       <div class="hr"></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <span id="unlistedBadge" class="pill"></span>
+        <button id="unlistedBadge" class="pill" type="button" onclick="toggleListingAudit()" aria-expanded="false"></button>
+        <span class="muted">クリックで不足商品の内訳を表示</span>
         <button class="btn sm" onclick="copySyncList()">📤 URL同期用リストをコピー</button>
         <span class="muted">「販売中」の全件を現在のURLごと書き出します。新規登録も、再出品でURLが変わったものの更新も、これ1つで済みます</span>
       </div>
+      <div id="listingAuditDetail" style="display:none;margin-top:10px"></div>
       <div id="unlistedBox" style="display:none;margin-top:8px"></div>
     </div>
     <div class="card" id="delistCard" style="display:none;border-color:#ffcc80;background:#fffdf7">
@@ -221,7 +224,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-09-30e</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-05a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -787,17 +790,29 @@ async function doCsvImport(inp){var f=inp.files[0];if(!f)return;if(!confirm('CSV
 /* ============ 出品URL・取り下げ管理 ============ */
 var NOLIST='(出品なし)';
 function isUrl(u){return /^https?:\/\//.test(String(u==null?'':u));}
-function missingChannels(x){var ls=x.listings||{};
-  return channelNames().filter(function(n){var v=ls[n];return !isUrl(v)&&v!==NOLIST;});}
-function hasAnyListing(x){var ls=x.listings||{},chs=channelNames();for(var i=0;i<chs.length;i++){var v=ls[chs[i]];if(isUrl(v)||v===NOLIST)return true;}return false;}
-function unlistedItems(){return STOCK.filter(function(x){return x.status==='販売中'&&!hasAnyListing(x);});}
+var listingAuditOpen=false;
+function yahooListingChannel(){var chs=channelNames();return chs.indexOf('Yahoo!フリマ')>=0?'Yahoo!フリマ':(chs.indexOf('ヤフフリマ')>=0?'ヤフフリマ':'Yahoo!フリマ');}
+function listingAuditItems(){var ych=yahooListingChannel();
+  return STOCK.filter(function(x){return x.status==='販売中';}).map(function(x){
+    var ls=x.listings||{},mercari=ls['メルカリ']||'',yahoo=ls[ych]||'',mirai=ls['未来ヤフフリ']||'';
+    return {item:x,mercari:mercari,yahoo:yahoo,mirai:mirai,missingMercari:!isUrl(mercari),missingYahoo:!isUrl(yahoo)&&!isUrl(mirai)};
+  }).filter(function(r){return r.missingMercari||r.missingYahoo;});}
+function listingAuditCell(v,missing){return isUrl(v)?'<a href="'+esc(v)+'" target="_blank" rel="noopener">URLあり ↗</a>':'<span class="'+(missing?'neg':'muted')+'">'+(v===NOLIST?'出品なし':'URL未登録')+'</span>';}
 function updateUnlistedBadge(){var el=$('unlistedBadge');if(!el)return;
-  var n=unlistedItems().length;
-  el.textContent='URL未登録 '+n+'件';el.title='「販売中」で、どの販路にも出品URLが1つも入っていない商品の数';
-  el.style.background=n?'#fff3e0':'#e0f2f1';el.style.color=n?'#e65100':'#00695c';}
+  var rows=listingAuditItems(),n=rows.length,detail=$('listingAuditDetail');
+  el.textContent='出品URL要確認 '+n+'件';el.title='「販売中」でメルカリにURLがない、またはYahoo!フリマと未来ヤフフリの両方にURLがない商品の数';
+  el.setAttribute('aria-expanded',listingAuditOpen?'true':'false');
+  el.style.background=n?'#fff3e0':'#e0f2f1';el.style.color=n?'#e65100':'#00695c';
+  if(!detail)return;detail.style.display=listingAuditOpen?'block':'none';if(!listingAuditOpen)return;
+  var missingMercari=rows.filter(function(r){return r.missingMercari;}).length,missingYahoo=rows.filter(function(r){return r.missingYahoo;}).length;
+  var body=rows.map(function(r){var x=r.item,missing=[];if(r.missingMercari)missing.push('メルカリ');if(r.missingYahoo)missing.push('Yahoo側');
+    return '<tr><td><b>'+esc(x.id)+'</b></td><td>'+esc((x.maker?x.maker+' ':'')+(x.name||''))+'</td><td>'+listingAuditCell(r.mercari,r.missingMercari)+'</td><td>'+listingAuditCell(r.yahoo,r.missingYahoo)+'</td><td>'+listingAuditCell(r.mirai,r.missingYahoo)+'</td><td class="neg">'+missing.join('・')+'</td></tr>';}).join('');
+  detail.innerHTML='<div class="acc-alert"><b>出品・URL登録の要確認：'+n+'商品</b>（メルカリ不足 '+missingMercari+'件／Yahoo側不足 '+missingYahoo+'件、両方不足の商品は重複）<br>URLがなくても出品済みの可能性があります。実際の出品状態を確認し、該当商品のURLを登録してください。</div>'
+    +(n?'<div class="acc-table-wrap"><table><tr><th>商品ID</th><th>商品名</th><th>メルカリ</th><th>'+esc(yahooListingChannel())+'</th><th>未来ヤフフリ</th><th>不足</th></tr>'+body+'</table></div>':'<div class="msgbox">販売中の商品はすべて、メルカリとYahoo側の少なくとも一方にURLが登録されています。</div>');}
+function toggleListingAudit(){listingAuditOpen=!listingAuditOpen;updateUnlistedBadge();}
 function unlistedText(){
-  return unlistedItems().map(function(x){
-    return [x.id,(x.maker||''),(x.name||''),'未登録:'+missingChannels(x).join(',')].join('\t');}).join('\n');}
+  return listingAuditItems().map(function(r){var x=r.item,missing=[];if(r.missingMercari)missing.push('メルカリ');if(r.missingYahoo)missing.push('Yahoo側');
+    return [x.id,(x.maker||''),(x.name||''),'要確認:'+missing.join(',')].join('\t');}).join('\n');}
 function syncText(){
   var chs=channelNames();
   return STOCK.filter(function(x){return x.status==='販売中';}).map(function(x){
@@ -818,7 +833,7 @@ function copyToBox(txt,emptyMsg){
   else{try{document.execCommand('copy');done();}catch(e){toast('下の枠を選択してコピーしてください');}}
 }
 function copySyncList(){copyToBox(syncText(),'「販売中」の商品がありません。');}
-function copyUnlisted(){copyToBox(unlistedText(),'URLが1つも入っていない「販売中」の商品はありません。');}
+function copyUnlisted(){copyToBox(unlistedText(),'出品URLの要確認商品はありません。');}
 function listingLinks(x){
   var ls=x.listings||{},chs=channelNames(),sold=(x.status==='売却済み');
   var rows=chs.map(function(n){var u=ls[n]||'';
