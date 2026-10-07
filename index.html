@@ -201,6 +201,8 @@
   <section id="v-analysis" class="view">
     <div id="anKpis"></div>
     <div class="card">
+      <div class="muted">分析する金額</div><div class="catbtns" id="anModeBtns"></div>
+      <div class="hr"></div>
       <div class="muted">期間</div><div class="catbtns" id="anPeriodBtns"></div>
       <div class="row" style="align-items:flex-end;margin-top:8px">
         <div style="max-width:170px"><label>開始日</label><input type="date" id="anFrom"></div>
@@ -215,7 +217,7 @@
         <div><label>カテゴリ</label><select id="anCat" onchange="anFilterApply()"></select></div>
         <div><label>小カテゴリ</label><select id="anSub" onchange="anFilterApply()"></select></div>
         <div><label>担当者</label><select id="anStaff" onchange="anFilterApply()"></select></div>
-        <div><label>販路</label><select id="anCh" onchange="anFilterApply()"></select></div>
+        <div id="anChannelFilter"><label>販路</label><select id="anCh" onchange="anFilterApply()"></select></div>
         <div style="flex:0"><button class="btn ghost sm" onclick="clearAnFilter()">絞り込み解除</button></div>
       </div>
     </div>
@@ -224,7 +226,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-05a</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-07a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -977,7 +979,7 @@ function validStatePayload(o){return !!o&&typeof o==='object'&&!Array.isArray(o)
 function loadState(){var raw=localStorage.getItem(KEY);if(raw==null||raw==='')return DEMO_MODE?demoState():defaultState();var s;try{s=JSON.parse(raw);}catch(e){throw new Error('保存データのJSON解析に失敗');}if(!validStatePayload(s))throw new Error('保存データの形式が不正');return normalize(s);}
 function downloadRawState(){var raw=localStorage.getItem(KEY);if(raw==null){alert('この端末に保存データがありません');return;}var blob=new Blob([raw],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='中古販売_読込エラー原文_'+todayStr().replace(/\//g,'')+'.txt';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);}
 function save(){localStorage.setItem(KEY,JSON.stringify(state));schedulePush();}
-function nowStr(){var d=new Date(),p=function(n){return ('0'+n).slice(-2);};return p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());}
+function nowStr(){var d=new Date(),p=function(n){return ('0'+n).slice(-2);};return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());}
 function setSync(t){var el=document.getElementById('who');if(el)el.textContent=t;}
 
 function buildCFG(){var s=state.settings;var subs={};s.subcategories.forEach(function(x){(subs[x.parent]=subs[x.parent]||[]).push(x.name);});
@@ -1241,12 +1243,15 @@ function sortList(list){var m=document.getElementById('mSort'),v=m?m.value:'';if
   return list.slice().sort(function(a,b){var pa=salePeriod(a),pb=salePeriod(b);
     if(pa==null&&pb==null)return 0;if(pa==null)return 1;if(pb==null)return -1;
     return v==='pdesc'?(pb-pa):(pa-pb);});}
-/* ====== 売上分析 v2（軸切替・絞り込み・ドリルダウン） ====== */
-var anFrom='',anTo='',anLabel='全期間',anPeriodKey='all',anAxis='month',anChart=null,AN_ROWS=[],anDetailOpen=false;
+/* ====== 売上・仕入分析（軸切替・絞り込み・ドリルダウン） ====== */
+var anFrom='',anTo='',anLabel='全期間',anPeriodKey='all',anAxis='month',anMode='sales',anChart=null,AN_ROWS=[],anDetailOpen=false;
 var anF={cat:'',sub:'',staff:'',ch:''};
 var AN_AXES=[['month','📅 月ごとの推移'],['category','🗂 カテゴリごと'],['sub','📁 小カテゴリごと'],['staff','👤 担当者ごと'],['channel','🛒 販路ごと']];
 function fmtISO(d){var q=function(n){return ('0'+n).slice(-2);};return d.getFullYear()+'-'+q(d.getMonth()+1)+'-'+q(d.getDate());}
 function anAxisLabel(k){for(var i=0;i<AN_AXES.length;i++){if(AN_AXES[i][0]===k)return AN_AXES[i][1];}return '';}
+function buildAnModeBtns(){var el=$('anModeBtns');if(!el)return;
+  el.innerHTML=[['sales','売上・利益'],['purchase','仕入金額']].map(function(a){return '<button class="'+(anMode===a[0]?'active':'')+'" onclick="setAnMode(\''+a[0]+'\')">'+a[1]+'</button>';}).join('');}
+function setAnMode(k){if((k!=='sales'&&k!=='purchase')||anMode===k)return;anMode=k;anAxis='month';anF={cat:'',sub:'',staff:'',ch:''};anDetailOpen=false;loadAnalysis();}
 function allSubNames(){var a=[],m=(CFG&&CFG.subcategories)||{};Object.keys(m).forEach(function(k){(m[k]||[]).forEach(function(x){if(a.indexOf(x)<0)a.push(x);});});return a;}
 function monthLabel(k){var m=/^(\d{4})-(\d{2})$/.exec(k);return m?(m[1]+'/'+m[2]):k;}
 
@@ -1301,16 +1306,19 @@ function setAnPeriod(k){var now=new Date(),y=now.getFullYear(),m=now.getMonth();
 function applyAnalysisRange(){anFrom=$('anFrom').value;anTo=$('anTo').value;anPeriodKey='';anLabel=(anFrom||'最初')+' 〜 '+(anTo||'最新');loadAnalysis();}
 
 function buildAnAxisBtns(){var el=$('anAxisBtns');if(!el)return;
-  el.innerHTML=AN_AXES.map(function(a){return '<button class="'+(anAxis===a[0]?'active':'')+'" onclick="setAnAxis(\''+a[0]+'\')">'+a[1]+'</button>';}).join('');}
+  el.innerHTML=AN_AXES.filter(function(a){return anMode==='sales'||a[0]!=='channel';}).map(function(a){return '<button class="'+(anAxis===a[0]?'active':'')+'" onclick="setAnAxis(\''+a[0]+'\')">'+a[1]+'</button>';}).join('');}
 function setAnAxis(k){anAxis=k;loadAnalysis();}
 
 function buildAnFilters(){var c=$('anCat');if(!c||!CFG)return;
-  c.innerHTML='<option value="">すべて</option>'+opt(catNames(),anF.cat);c.value=anF.cat;
-  var subs=anF.cat?(CFG.subcategories[anF.cat]||[]):allSubNames();
+  var cats=catNames().slice();if(anMode==='purchase'&&cats.indexOf('付属品')<0)cats.push('付属品');
+  c.innerHTML='<option value="">すべて</option>'+opt(cats,anF.cat);c.value=anF.cat;
+  var subs=anF.cat==='付属品'?accessoryTypeNames():(anF.cat?(CFG.subcategories[anF.cat]||[]):allSubNames().concat(anMode==='purchase'?accessoryTypeNames():[]));
+  subs=subs.filter(function(x,i){return subs.indexOf(x)===i;});
   if(anF.sub&&subs.indexOf(anF.sub)<0)anF.sub='';
   $('anSub').innerHTML='<option value="">すべて</option>'+opt(subs,anF.sub);$('anSub').value=anF.sub;
   $('anStaff').innerHTML='<option value="">すべて</option>'+opt(CFG.staff,anF.staff);$('anStaff').value=anF.staff;
-  $('anCh').innerHTML='<option value="">すべて</option>'+opt(channelNames(),anF.ch);$('anCh').value=anF.ch;}
+  $('anCh').innerHTML='<option value="">すべて</option>'+opt(channelNames(),anF.ch);$('anCh').value=anF.ch;
+  $('anChannelFilter').style.display=anMode==='purchase'?'none':'';}
 function anFilterApply(){anF.cat=$('anCat').value;anF.sub=$('anSub').value;anF.staff=$('anStaff').value;anF.ch=$('anCh').value;loadAnalysis();}
 function clearAnFilter(){anF={cat:'',sub:'',staff:'',ch:''};loadAnalysis();}
 function anDrill(i){var o=AN_ROWS[i];if(!o)return;var k=(o.key==='(未設定)')?'':o.key;
@@ -1322,8 +1330,10 @@ function anDrill(i){var o=AN_ROWS[i];if(!o)return;var k=(o.key==='(未設定)')?
 
 function loadAnalysis(){
   if(!CFG||!$('analysisBody'))return;
-  buildAnPeriodBtns();buildAnAxisBtns();buildAnFilters();
+  buildAnModeBtns();buildAnPeriodBtns();buildAnAxisBtns();buildAnFilters();
   var e1=$('anFrom');if(e1)e1.value=anFrom;var e2=$('anTo');if(e2)e2.value=anTo;
+  $('anKpis').style.display=anMode==='purchase'?'none':'';
+  if(anMode==='purchase'){loadPurchaseAnalysis();return;}
   var items=anItems();AN_ROWS=anGroup(items,anAxis);
   var tr=0,tp=0,tc=0,dsum=0,dn=0;
   items.forEach(function(x){var fig=salesOfMain(x);tr+=fig.revenue;tp+=fig.profit;tc+=fig.cost;var p=salePeriod(x);if(p!=null){dsum+=p;dn++;}});
@@ -1398,6 +1408,80 @@ function anCsv(){var isM=(anAxis==='month');
   var out=[[isM?'月':'区分','件数','売上','利益','利益率(%)','平均利益','平均販売日数']];
   AN_ROWS.forEach(function(o){out.push([isM?monthLabel(o.key):o.key,o.count,o.revenue,o.profit,o.rate,o.avgProfit,o.avgDays==null?'':o.avgDays]);});
   dlCsv('売上分析_'+anAxis+'_'+todayStr().replace(/\//g,'')+'.csv',out);}
+
+function purchaseRecords(){
+  var out=STOCK.map(function(x){return {date:x.buyDate||'',id:x.id||'',name:((x.maker?x.maker+' ':'')+(x.name||'')).trim(),category:x.category||'',sub:x.subCategory||'',staff:x.staff||'',qty:1,amount:Number(x.cost)||0};});
+  (state.accessoryMovements||[]).forEach(function(m){
+    if((m.type!=='初回仕入れ'&&m.type!=='追加仕入れ')||!(Number(m.qty)>0))return;
+    var s=findAccessory(m.sku);
+    out.push({date:parseD(m.at)?String(m.at).substring(0,10):'',id:String(m.sku||'')+' #'+m.id,name:s?s.name||'':'',category:'付属品',sub:s?s.type||'':'',staff:'',qty:Number(m.qty),amount:Number(m.qty)*(Number(m.unitCost)||0)});
+  });
+  return out;
+}
+function purchaseItems(){
+  var f=anFrom?new Date(anFrom+'T00:00:00'):null,t=anTo?new Date(anTo+'T23:59:59'):null;
+  return purchaseRecords().filter(function(x){
+    if(f||t){var d=parseD(x.date);if(!d)return false;if(f&&d<f)return false;if(t&&d>t)return false;}
+    if(anF.cat&&x.category!==anF.cat)return false;
+    if(anF.sub&&x.sub!==anF.sub)return false;
+    if(anF.staff&&x.staff!==anF.staff)return false;
+    return true;
+  });
+}
+function purchaseKeyOf(x,axis){
+  if(axis==='month')return parseD(x.date)?String(x.date).substring(0,7).replace(/\//g,'-'):'(未設定)';
+  if(axis==='category')return x.category||'(未設定)';
+  if(axis==='sub')return x.sub||'(未設定)';
+  return x.staff||'(未設定)';
+}
+function purchaseGroup(items,axis){
+  var m={};items.forEach(function(x){var k=purchaseKeyOf(x,axis),g=m[k]||(m[k]={key:k,count:0,qty:0,amount:0});g.count++;g.qty+=x.qty;g.amount+=x.amount;});
+  var rows=Object.keys(m).map(function(k){var g=m[k];g.avg=g.qty?Math.round(g.amount/g.qty):0;return g;});
+  if(axis==='month')rows.sort(function(a,b){return a.key==='(未設定)'?1:(b.key==='(未設定)'?-1:(a.key<b.key?-1:(a.key>b.key?1:0)));});
+  else rows.sort(function(a,b){return b.amount-a.amount;});
+  return rows;
+}
+function loadPurchaseAnalysis(){
+  var items=purchaseItems();AN_ROWS=purchaseGroup(items,anAxis);
+  var total=items.reduce(function(n,x){n.amount+=x.amount;n.qty+=x.qty;return n;},{amount:0,qty:0});
+  var fl=[];if(anF.cat)fl.push(anF.cat);if(anF.sub)fl.push(anF.sub);if(anF.staff)fl.push('担当 '+anF.staff);
+  var h=anAxis==='month'?260:Math.max(200,AN_ROWS.length*38+70);
+  if(anChart){anChart.destroy();anChart=null;}
+  $('analysisBody').innerHTML='<div class="hero"><div class="l">'+esc(anLabel)+(fl.length?'　【'+esc(fl.join(' / '))+'】':'')+' の仕入金額</div><div class="n">'+yen(total.amount)+' 円</div><div class="s">仕入明細 '+items.length+'件 ・ 仕入数量 '+yen(total.qty)+'点</div></div>'
+    +'<div class="kpis small"><div class="kpi sm blue"><div class="n">'+yen(total.amount)+'円</div><div class="l">仕入金額</div></div><div class="kpi sm"><div class="n">'+items.length+'件</div><div class="l">仕入明細</div></div><div class="kpi sm orange"><div class="n">'+yen(total.qty)+'点</div><div class="l">仕入数量</div></div></div>'
+    +'<p class="muted">本体は全ステータスの商品を仕入日・現在登録されている仕入価格で集計します。付属品は初回・追加仕入れの履歴から、数量×当時の単価で集計します。販路は仕入時点では未確定のため対象外です。日付が空欄の本体と、年が記録されていない旧形式の付属品履歴は、全期間の「未設定」に含め、期間指定中は除外します。</p>'
+    +'<div class="card" style="margin-top:12px"><h3>'+esc(anAxisLabel(anAxis))+'</h3>'+(AN_ROWS.length?'<div style="height:'+h+'px"><canvas id="anChart"></canvas></div>':'<div class="loading">この条件の仕入れデータはありません</div>')+'</div>'
+    +purchaseTable(AN_ROWS)
+    +'<div class="card"><div style="cursor:pointer" onclick="toggleAnDetail()"><b>📄 仕入明細（'+items.length+'件）</b> <span>'+(anDetailOpen?'▲':'▼')+'</span></div><div style="display:'+(anDetailOpen?'block':'none')+';margin-top:8px;overflow-x:auto">'+(anDetailOpen?purchaseDetailTable(items):'')+'</div></div>';
+  $('accessoryAnalysis').innerHTML='';
+  drawPurchaseChart(AN_ROWS);
+}
+function purchaseTable(rows){
+  if(!rows.length)return '';
+  var isM=anAxis==='month',sum={count:0,qty:0,amount:0};
+  var body=rows.map(function(o,i){sum.count+=o.count;sum.qty+=o.qty;sum.amount+=o.amount;
+    var attr=isM?'':' class="anrow" style="cursor:pointer" onclick="anDrill('+i+')"';
+    return '<tr'+attr+'><td>'+esc(isM?monthLabel(o.key):o.key)+'</td><td>'+o.count+'</td><td>'+yen(o.qty)+'</td><td>'+yen(o.amount)+'円</td><td>'+yen(o.avg)+'円</td></tr>';}).join('');
+  return '<div class="card"><h3>'+esc(anAxisLabel(anAxis))+' の仕入内訳</h3>'+(isM?'<p class="muted">仕入日を基準に集計しています。</p>':'<p class="muted">行をタップすると、その区分でさらに詳しく見られます。</p>')
+    +'<div style="overflow-x:auto"><table><tr><th>'+(isM?'月':'区分')+'</th><th>明細件数</th><th>仕入数量</th><th>仕入金額</th><th>平均仕入単価</th></tr>'+body
+    +'<tr style="background:#f7f9fa;font-weight:700"><td>合計</td><td>'+sum.count+'</td><td>'+yen(sum.qty)+'</td><td>'+yen(sum.amount)+'円</td><td>'+yen(sum.qty?Math.round(sum.amount/sum.qty):0)+'円</td></tr></table></div>'
+    +'<div style="margin-top:10px"><button class="btn ghost sm" onclick="purchaseCsv()">⬇ この表をCSVで保存</button></div></div>';
+}
+function drawPurchaseChart(rows){
+  var cv=$('anChart');if(!cv||typeof Chart==='undefined'||!rows.length)return;
+  var isM=anAxis==='month',base={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){return '仕入金額: '+yen(c.raw)+'円';}}}}};
+  base.scales=isM?{y:{ticks:{callback:function(v){return yen(v);}}}}:{x:{ticks:{callback:function(v){return yen(v);}}}};
+  if(!isM)base.indexAxis='y';
+  anChart=new Chart(cv,{type:'bar',data:{labels:rows.map(function(o){return isM?monthLabel(o.key):o.key;}),datasets:[{label:'仕入金額',data:rows.map(function(o){return o.amount;}),backgroundColor:'#80cbc4'}]},options:base});
+}
+function purchaseDetailTable(items){
+  var list=items.slice().sort(function(a,b){return String(b.date||'').localeCompare(String(a.date||''));}).slice(0,300);
+  var rows=list.map(function(x){return '<tr><td>'+esc(x.date||'未設定')+'</td><td style="font-family:monospace">'+esc(x.id)+'</td><td>'+esc(x.name)+'</td><td>'+esc(x.category||'')+(x.sub?' / '+esc(x.sub):'')+'</td><td>'+esc(x.staff||'—')+'</td><td>'+yen(x.qty)+'</td><td>'+yen(x.amount)+'円</td></tr>';}).join('')||'<tr><td colspan="7" class="muted">データなし</td></tr>';
+  return '<table><tr><th>仕入日</th><th>商品ID</th><th>商品名</th><th>カテゴリ</th><th>担当者</th><th>数量</th><th>仕入金額</th></tr>'+rows+'</table>'+(items.length>300?'<p class="muted">最新300件のみ表示しています。</p>':'');
+}
+function purchaseCsv(){var isM=anAxis==='month',out=[[isM?'月':'区分','明細件数','仕入数量','仕入金額','平均仕入単価']];
+  AN_ROWS.forEach(function(o){out.push([isM?monthLabel(o.key):o.key,o.count,o.qty,o.amount,o.avg]);});
+  dlCsv('仕入分析_'+anAxis+'_'+todayStr().replace(/\//g,'')+'.csv',out);}
 
 /* ====== 新品付属品：商品ID・数量・同梱注文 ====== */
 function accessoryTypeNames(){return (state&&state.settings&&state.settings.accessoryTypes)||[];}
