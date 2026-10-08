@@ -150,6 +150,13 @@
       </div>
       <div id="listingAuditDetail" style="display:none;margin-top:10px"></div>
       <div id="unlistedBox" style="display:none;margin-top:8px"></div>
+      <div class="hr"></div>
+      <details id="standaloneAccessoryDetails"><summary style="cursor:pointer;font-weight:700">🪛 付属品の単品販売・出荷依頼</summary>
+        <p class="muted">商品ごとの標準売価と在庫を確認し、実売単価・数量・販路・送料パターンを指定して出荷依頼します。単品販売の送料は付属品の利益から引きます。</p>
+        <div id="standaloneAccessoryList" class="acc-table-wrap"></div>
+        <div id="standaloneAccessoryForm" style="margin-top:12px"></div>
+        <div id="standaloneAccessoryOut"></div>
+      </details>
     </div>
     <div class="card" id="delistCard" style="display:none;border-color:#ffcc80;background:#fffdf7">
       <h2>🔻 取り下げ待ち（他サイトの出品）</h2>
@@ -226,7 +233,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-07a</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-08a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -558,7 +565,7 @@ function optPattern(sel){return '<option value=""></option>'+CFG.shipPatterns.ma
 function renderSummary(){var sc={},cc={};STOCK.forEach(function(x){sc[x.status]=(sc[x.status]||0)+1;if(x.status!=='売却済み')cc[x.category]=(cc[x.category]||0)+1;});
   $('stockSummary').innerHTML='<div><div class="muted">ステータス別</div>'+CFG.statuses.map(function(s){return '<span class="chip">'+esc(s)+' <b>'+(sc[s]||0)+'</b></span>';}).join('')+'</div><div><div class="muted">カテゴリ別在庫</div>'+catNames().map(function(c){return '<span class="chip">'+esc(c)+' <b>'+(cc[c]||0)+'</b></span>';}).join('')+'</div>';}
 function renderManage(){
-  var el=$('manageList');if(!CFG||!el)return;renderSummary();updateUnlistedBadge();buildDataLists();
+  var el=$('manageList');if(!CFG||!el)return;renderSummary();updateUnlistedBadge();renderStandaloneAccessoryList();buildDataLists();
   var q=$('mSearch').value.trim(),showImg=$('showImg').checked,pMin=$('pMin').value,pMax=$('pMax').value,hasR=(pMin!==''||pMax!=='');
   var list=STOCK.filter(function(x){
     if(!(manageCat==='すべて'||x.category===manageCat))return false;
@@ -1134,7 +1141,8 @@ function toggleLog(kind){var box=document.getElementById('logbox-'+kind),car=doc
 function refreshOpenLogs(){['buy','manage','ship'].forEach(function(k){var box=document.getElementById('logbox-'+k);if(box&&box.style.display!=='none')loadLogInto(k);});}
 function undo(logId){if(!confirm('この操作を取り消し（削除）しますか？'))return;var g=state.logs.filter(function(x){return x.id===logId;})[0];if(!g||g.state==='取消済'){toast('取り消せません');return;}
   if(g.type==='仕入れ'){var it=state.items.filter(function(x){return x.id===g.item_id;})[0];if(it&&it.status==='売却済み'){toast('売却済みのため取消不可。先に出荷ログを取消してください');return;}state.items=state.items.filter(function(x){return x.id!==g.item_id;});STOCK=state.items;}
-  else if(g.type==='出荷'){state.delist=(state.delist||[]).filter(function(d){return d.id!==g.item_id;});var it2=state.items.filter(function(x){return x.id===g.item_id;})[0],ord=g.revert&&g.revert.orderId?(state.orders||[]).filter(function(o){return o.id===g.revert.orderId&&o.status!=='取消済';})[0]:null;
+  else if(g.type==='出荷'){var solo=!!(g.revert&&g.revert.kind==='accessory-standalone');if(!solo)state.delist=(state.delist||[]).filter(function(d){return d.id!==g.item_id;});
+    var it2=solo?null:state.items.filter(function(x){return x.id===g.item_id;})[0],ord=g.revert&&g.revert.orderId?(state.orders||[]).filter(function(o){return o.id===g.revert.orderId&&o.status!=='取消済';})[0]:null;
     if(ord){(ord.accessories||[]).forEach(function(a){var sku=findAccessory(a.sku);if(sku)sku.qty+=a.qty;state.accessoryMovements.push({id:++state.accessoryMoveSeq,at:nowStr(),sku:a.sku,type:'出荷取消',qty:a.qty,unitCost:a.unitCost,avgCostAfter:sku?sku.avgCost:null,stockAfter:sku?sku.qty:null,orderId:ord.id,note:'出荷取消'});});ord.status='取消済';}
     if(it2){if(g.revert&&g.revert.item)applyRevert(it2,g.revert.item);else{it2.status='未販売';it2.channel='';it2.salePrice='';it2.profit='';it2.shipDate='';it2.saleDate='';}computeProfits(it2);}}
   else if(g.type==='編集'){var it3=state.items.filter(function(x){return x.id===g.item_id;})[0];if(it3&&g.revert){applyRevert(it3,g.revert);computeProfits(it3);}}
@@ -1212,6 +1220,14 @@ function dashFromStock(){
         if(yy===nowY&&mm===nowM)mG+=p;}
     } else sv+=(Number(x.cost)||0);
    });
+   standaloneAccessorySales().forEach(function(x){var r=Number(x.salePrice)||0,p=Number(x.profit)||0;
+     if(!byCat['付属品'])byCat['付属品']={sold:0,profit:0,revenue:0};
+     rev+=r;g+=p;byCat['付属品'].sold++;byCat['付属品'].profit+=p;byCat['付属品'].revenue+=r;
+     recent.push({id:x.id,name:x.name,channel:x.channel,salePrice:r,profit:p,date:x.saleDate});
+     var mk=(x.saleDate&&x.saleDate.length>=7)?x.saleDate.substring(0,7).replace('/','-'):'未設定';
+     if(!monthly[mk])monthly[mk]={revenue:0,gross:0};monthly[mk].revenue+=r;monthly[mk].gross+=p;
+     var dt=parseD(x.saleDate);if(dt){var yy=dt.getFullYear(),mm=dt.getMonth()+1;if(fyOf(yy,mm)===curFY)fyG+=p;if(yy===nowY&&mm===nowM)mG+=p;}
+   });
    (state.accessorySkus||[]).forEach(function(s){sv+=Math.round((Number(s.qty)||0)*(Number(s.avgCost)||0));});
    recent.sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
   var months=Object.keys(monthly).filter(function(m){return m!=='未設定';}).sort();
@@ -1257,7 +1273,7 @@ function monthLabel(k){var m=/^(\d{4})-(\d{2})$/.exec(k);return m?(m[1]+'/'+m[2]
 
 function anItems(){
   var f=anFrom?new Date(anFrom+'T00:00:00'):null,t=anTo?new Date(anTo+'T23:59:59'):null;
-  return STOCK.filter(function(x){
+  return STOCK.concat(standaloneAccessorySales()).filter(function(x){
     if(x.status!=='売却済み')return false;
     if(f||t){var d=parseD(x.saleDate);if(!d)return false;if(f&&d<f)return false;if(t&&d>t)return false;}
     if(anF.cat&&x.category!==anF.cat)return false;
@@ -1310,9 +1326,9 @@ function buildAnAxisBtns(){var el=$('anAxisBtns');if(!el)return;
 function setAnAxis(k){anAxis=k;loadAnalysis();}
 
 function buildAnFilters(){var c=$('anCat');if(!c||!CFG)return;
-  var cats=catNames().slice();if(anMode==='purchase'&&cats.indexOf('付属品')<0)cats.push('付属品');
+  var cats=catNames().slice();if(cats.indexOf('付属品')<0)cats.push('付属品');
   c.innerHTML='<option value="">すべて</option>'+opt(cats,anF.cat);c.value=anF.cat;
-  var subs=anF.cat==='付属品'?accessoryTypeNames():(anF.cat?(CFG.subcategories[anF.cat]||[]):allSubNames().concat(anMode==='purchase'?accessoryTypeNames():[]));
+  var subs=anF.cat==='付属品'?accessoryTypeNames():(anF.cat?(CFG.subcategories[anF.cat]||[]):allSubNames().concat(accessoryTypeNames()));
   subs=subs.filter(function(x,i){return subs.indexOf(x)===i;});
   if(anF.sub&&subs.indexOf(anF.sub)<0)anF.sub='';
   $('anSub').innerHTML='<option value="">すべて</option>'+opt(subs,anF.sub);$('anSub').value=anF.sub;
@@ -1340,13 +1356,13 @@ function loadAnalysis(){
   var rate=tr>0?Math.round(tp/tr*1000)/10:0;
   var fl=[];if(anF.cat)fl.push(anF.cat);if(anF.sub)fl.push(anF.sub);if(anF.staff)fl.push('担当 '+anF.staff);if(anF.ch)fl.push(anF.ch);
   var h=(anAxis==='month')?260:Math.max(200,AN_ROWS.length*38+70);
-  var html='<div class="hero"><div class="l">'+esc(anLabel)+(fl.length?'　【'+esc(fl.join(' / '))+'】':'')+' の利益（売却済み）</div><div class="n">'+yen(tp)+' 円</div><div class="s">'+items.length+'点 ・ 売上 '+yen(tr)+'円 ・ 利益率 '+rate+'%</div></div>'
+  var html='<div class="hero"><div class="l">'+esc(anLabel)+(fl.length?'　【'+esc(fl.join(' / '))+'】':'')+' の利益（売却済み）</div><div class="n">'+yen(tp)+' 円</div><div class="s">'+items.length+'件 ・ 売上 '+yen(tr)+'円 ・ 利益率 '+rate+'%</div></div>'
    +'<div class="kpis small">'
-   +'<div class="kpi sm"><div class="n">'+items.length+'点</div><div class="l">本体の売却点数</div></div>'
+   +'<div class="kpi sm"><div class="n">'+items.length+'件</div><div class="l">売却件数（本体・付属品単品）</div></div>'
    +'<div class="kpi sm blue"><div class="n">'+yen(tr)+'円</div><div class="l">売上</div></div>'
    +'<div class="kpi sm"><div class="n">'+yen(tc)+'円</div><div class="l">仕入原価</div></div>'
-   +'<div class="kpi sm green"><div class="n">'+yen(items.length?Math.round(tp/items.length):0)+'円</div><div class="l">1点あたり平均利益</div></div>'
-   +'<div class="kpi sm orange"><div class="n">'+(dn?Math.round(dsum/dn)+'日':'—')+'</div><div class="l">平均販売日数</div></div>'
+   +'<div class="kpi sm green"><div class="n">'+yen(items.length?Math.round(tp/items.length):0)+'円</div><div class="l">1件あたり平均利益</div></div>'
+   +'<div class="kpi sm orange"><div class="n">'+(dn?Math.round(dsum/dn)+'日':'—')+'</div><div class="l">平均販売日数（本体のみ）</div></div>'
    +'</div>'
    +'<div class="card" style="margin-top:12px"><h3>'+esc(anAxisLabel(anAxis))+'</h3>'
    +(AN_ROWS.length?'<div style="height:'+h+'px"><canvas id="anChart"></canvas></div>':'<div class="loading">この条件のデータはありません</div>')
@@ -1496,6 +1512,49 @@ function saveAccessoryTypes(){var rows=Array.from($('setAccessoryTypes').querySe
   state.accessorySkus.forEach(function(s){if(renamed[s.type])s.type=renamed[s.type];});
   state.settings.accessoryTypes=names;save();renderAccessoryTypesSettings();renderAccessories();toast('付属品の種類を保存しました');}
 function findAccessory(sku){return (state.accessorySkus||[]).filter(function(x){return x.sku===sku;})[0]||null;}
+var standaloneAccessorySelected='';
+function renderStandaloneAccessoryList(){var el=$('standaloneAccessoryList');if(!el||!state)return;
+  var skus=(state.accessorySkus||[]).slice().sort(function(a,b){return String(a.type||'').localeCompare(String(b.type||'','ja'))||String(a.name||'').localeCompare(String(b.name||'','ja'));});
+  el.innerHTML=skus.length?'<table><tr><th>商品ID</th><th>種類・商品名</th><th>在庫</th><th>標準売価</th><th></th></tr>'+skus.map(function(s){return '<tr><td>'+esc(s.sku)+'</td><td>'+esc(s.type||'')+'｜'+esc(s.name||'')+'</td><td>'+yen(s.qty)+'点</td><td>'+yen(s.price)+'円</td><td><button class="btn accent sm" data-sku="'+esc(s.sku)+'" onclick="selectStandaloneAccessory(this.dataset.sku)"'+(Number(s.qty)>0?'':' disabled')+'>🚚 出荷依頼</button></td></tr>';}).join('')+'</table>':'<p class="muted">付属品がまだ登録されていません。</p>';}
+function selectStandaloneAccessory(sku){var s=findAccessory(sku);if(!s||!(Number(s.qty)>0)){toast('この付属品の在庫がありません');return;}
+  standaloneAccessorySelected=sku;$('standaloneAccessoryOut').innerHTML='';
+  var ch=channelNames()[0]||'',pat='';
+  $('standaloneAccessoryForm').innerHTML='<div class="card" style="background:#f8fbfa"><h3>単品の出荷依頼：'+esc(s.sku)+'｜'+esc(s.type)+'｜'+esc(s.name)+'</h3>'
+    +'<p class="muted">在庫 '+yen(s.qty)+'点 ・ 平均仕入単価 '+yen(s.avgCost)+'円 ・ 標準売価 '+yen(s.price)+'円</p>'
+    +'<div class="row"><div><label>販路</label><select id="standaloneChannel" onchange="standaloneChannelChange()">'+opt(channelNames(),ch)+'</select></div>'
+    +'<div><label>数量</label><input id="standaloneQty" type="number" min="1" step="1" value="1" oninput="calcStandaloneShip()"></div>'
+    +'<div><label>今回の販売単価</label><input id="standalonePrice" type="number" min="1" step="1" value="'+(Number(s.price)||'')+'" oninput="calcStandaloneShip()"></div>'
+    +'<div><label>送料パターン（必須）</label><select id="standalonePattern" onchange="standalonePatternChange()">'+optPattern(pat)+'</select></div>'
+    +'<div><label>発送方法（自動）</label><input id="standaloneMethod" readonly style="background:#f5f5f5"></div></div>'
+    +'<div id="standaloneCalc" style="margin-top:8px"></div><button class="btn accent" id="standaloneGo" onclick="doStandaloneShip()">✅ 在庫から差引 ＆ LINEを開く</button></div>';
+  if(DEMO_MODE)$('standaloneGo').textContent='✅ デモで在庫から差引';
+  standalonePatternChange();$('standaloneAccessoryForm').scrollIntoView({behavior:'smooth',block:'nearest'});}
+function standaloneChannelChange(){calcStandaloneShip();}
+function standalonePatternChange(){$('standaloneMethod').value=patternMethod($('standalonePattern').value)||'（未設定）';calcStandaloneShip();}
+function calculateStandaloneAccessorySale(s,ch,pat,qty,unitPrice){var revenue=qty*unitPrice,cost=Math.round(qty*(Number(s.avgCost)||0)),fee=Math.round(revenue*feeOf(ch)/100),shipping=patternFee(pat);
+  return {revenue:revenue,cost:cost,fee:fee,shipping:shipping,profit:revenue-cost-fee-shipping};}
+function calcStandaloneShip(){var s=findAccessory(standaloneAccessorySelected),el=$('standaloneCalc');if(!s||!el)return;
+  var qty=Number($('standaloneQty').value),unitPrice=Number($('standalonePrice').value),ch=$('standaloneChannel').value,pat=$('standalonePattern').value;
+  if(!validWhole(qty,1)||qty>Number(s.qty)||!validWhole(unitPrice,1)){el.innerHTML='<div class="acc-alert">数量・販売単価・在庫を確認してください。</div>';return;}
+  if(!pat||!patternMethod(pat)){el.innerHTML='<div class="acc-alert">送料パターンを選択すると利益を計算できます。</div>';return;}
+  var c=calculateStandaloneAccessorySale(s,ch,pat,qty,unitPrice);
+  el.innerHTML='<div class="msgbox">売上 '+yen(c.revenue)+'円（'+yen(unitPrice)+'円 × '+yen(qty)+'点）<br>仕入原価 '+yen(c.cost)+'円 ・ 販路手数料 '+yen(c.fee)+'円 ・ 送料 '+yen(c.shipping)+'円<br><b>単品販売の利益 '+profitHtml(c.profit)+'</b></div>';}
+function doStandaloneShip(){var s=findAccessory(standaloneAccessorySelected);if(!s)return;
+  var ch=$('standaloneChannel').value,pat=$('standalonePattern').value,qty=Number($('standaloneQty').value),unitPrice=Number($('standalonePrice').value);
+  if(!ch||!pat||!patternMethod(pat)){toast('販路と送料パターンを選んでください');return;}
+  if(!validWhole(qty,1)||qty>Number(s.qty)||!validWhole(unitPrice,1)){toast('数量・販売単価・在庫を確認してください');return;}
+  var c=calculateStandaloneAccessorySale(s,ch,pat,qty,unitPrice),today=todayStr(),method=patternMethod(pat);
+  var orderId='O'+today.replace(/\//g,'')+'-'+('0000'+(++state.orderSeq)).slice(-4);
+  var line={sku:s.sku,type:s.type,name:s.name,qty:qty,unitPrice:unitPrice,unitCost:Number(s.avgCost)||0,revenue:c.revenue,cost:c.cost,fee:c.fee,profit:c.profit};
+  state.orders.push({id:orderId,kind:'accessory-standalone',date:today,channel:ch,shipPattern:pat,method:method,accessories:[line],totalRevenue:c.revenue,totalCost:c.cost,fee:c.fee,shipping:c.shipping,profit:c.profit,status:'有効'});
+  s.qty-=qty;state.accessoryMovements.push({id:++state.accessoryMoveSeq,at:nowStr(),sku:s.sku,type:'単品販売',qty:-qty,unitCost:line.unitCost,avgCostAfter:s.avgCost,stockAfter:s.qty,orderId:orderId,note:'単品出荷'});
+  logAction('出荷',s.sku,s.name,ch+' 付属品単品 '+qty+'点 / 売上 '+c.revenue+'円 / 利益 '+c.profit+'円 / '+method+'('+pat+')',{orderId:orderId,kind:'accessory-standalone'});save();
+  var msg='【出荷依頼】\n付属品単品販売\n商品ID：'+s.sku+'\n種類：'+s.type+'\n商品名：'+s.name+'\n数量：'+qty+'点\n販売価格：'+yen(c.revenue)+'円\n販路：'+ch+'\n発送方法：'+method+'\n依頼日：'+today;
+  var out='<div class="msgbox"><b>'+esc(s.sku)+' を '+yen(qty)+'点、在庫から差し引きました。</b><br>売上 '+yen(c.revenue)+'円 ・ 販路手数料 '+yen(c.fee)+'円 ・ 送料 '+yen(c.shipping)+'円 ・ 利益 '+yen(c.profit)+'円<br>誤登録は下の「操作ログ（出荷）」から取り消せます。</div>';
+  if(DEMO_MODE)out+='<p class="muted">デモのためLINEは開きません。実際の出荷依頼文：</p><div class="msgbox">'+esc(msg)+'</div>';
+  else{var openUrl='https://line.me/R/msg/text/?'+encodeURIComponent(msg);try{window.open(openUrl,'_blank');}catch(e){}out+='<p><a class="btn accent" style="text-decoration:none;display:inline-block" target="_blank" rel="noopener" href="'+openUrl+'">📩 LINEを開く</a></p>';}
+  standaloneAccessorySelected='';$('standaloneAccessoryForm').innerHTML='';$('standaloneAccessoryOut').innerHTML=out;
+  renderStandaloneAccessoryList();renderAccessories();renderDash(dashFromStock());refreshOpenLogs();toast('付属品の単品出荷依頼を記録しました');}
 function validWhole(n,min){return Number.isInteger(Number(n))&&Number(n)>=min;}
 function accessoryExpectedMargin(price,cost){price=Number(price);cost=Number(cost);if(!Number.isFinite(price)||price<=0||!Number.isFinite(cost))return null;return Math.round((price-cost-Math.round(price*0.1))/price*1000)/10;}
 function accessoryMarginHtml(price,cost){var margin=accessoryExpectedMargin(price,cost);return margin==null?'—':'<b class="'+(margin<0?'neg':'')+'">'+margin.toFixed(1)+'%</b>';}
@@ -1556,12 +1615,17 @@ function calculateOrder(main,ch,pat,price,strict){var lines=[],used={},error='',
   var totalRevenue=price+accRevenue,fee=Math.round(totalRevenue*rate/100),accFee=lines.reduce(function(n,a){return n+a.fee;},0),mainFee=fee-accFee,mainProfit=price-(Number(main.cost)||0)-mainFee-shipping,accProfit=lines.reduce(function(n,a){return n+a.profit;},0);
   return {lines:lines,error:error,accessoryRevenue:accRevenue,accessoryProfit:accProfit,totalRevenue:totalRevenue,totalCost:(Number(main.cost)||0)+accCost,fee:fee,mainFee:mainFee,shipping:shipping,mainProfit:mainProfit,profit:mainProfit+accProfit};}
 function orderForMain(id){return (state.orders||[]).filter(function(o){return o.mainItemId===id&&o.status!=='取消済';}).slice(-1)[0]||null;}
-function salesOfMain(x){var o=orderForMain(x.id),extra=o?(o.accessories||[]):[];return {revenue:(Number(x.salePrice)||0)+extra.reduce(function(n,a){return n+Number(a.revenue||0);},0),cost:(Number(x.cost)||0)+extra.reduce(function(n,a){return n+Number(a.cost||0);},0),profit:(Number(x.profit)||0)+extra.reduce(function(n,a){return n+Number(a.profit||0);},0)};}
+function standaloneAccessorySales(){return (state.orders||[]).filter(function(o){return o.kind==='accessory-standalone'&&o.status!=='取消済'&&(o.accessories||[]).length;}).map(function(o){var a=o.accessories[0];
+  return {isStandaloneAccessorySale:true,id:o.id,category:'付属品',subCategory:a.type||'',name:(a.sku||'')+'｜'+(a.name||'')+' ×'+(Number(a.qty)||0),staff:'',channel:o.channel||'',cost:Number(o.totalCost)||0,salePrice:Number(o.totalRevenue)||0,profit:Number(o.profit)||0,saleDate:o.date||'',listDate:'',status:'売却済み',qty:Number(a.qty)||0,fee:Number(o.fee)||0,shipping:Number(o.shipping)||0,sku:a.sku||''};});}
+function salesOfMain(x){if(x.isStandaloneAccessorySale)return {revenue:Number(x.salePrice)||0,cost:Number(x.cost)||0,profit:Number(x.profit)||0};
+  var o=orderForMain(x.id),extra=o?(o.accessories||[]):[];return {revenue:(Number(x.salePrice)||0)+extra.reduce(function(n,a){return n+Number(a.revenue||0);},0),cost:(Number(x.cost)||0)+extra.reduce(function(n,a){return n+Number(a.cost||0);},0),profit:(Number(x.profit)||0)+extra.reduce(function(n,a){return n+Number(a.profit||0);},0)};}
 function renderAccessoryAnalysis(items){var mains=items.filter(function(x){return x.category==='ギター'||x.category==='ベース';}),orders=mains.map(function(x){return orderForMain(x.id);}).filter(Boolean),attached=orders.filter(function(o){return (o.accessories||[]).length>0;}),lines=[];
   orders.forEach(function(o){(o.accessories||[]).forEach(function(a){lines.push(a);});});
   var revenue=lines.reduce(function(n,a){return n+Number(a.revenue||0);},0),profit=lines.reduce(function(n,a){return n+Number(a.profit||0);},0),units=lines.reduce(function(n,a){return n+Number(a.qty||0);},0),groups={};
   lines.forEach(function(a){var g=groups[a.sku]||(groups[a.sku]={sku:a.sku,name:a.name,qty:0,revenue:0,fee:0,profit:0});g.qty+=a.qty;g.revenue+=a.revenue;g.fee+=Number(a.fee||0);g.profit+=a.profit;});
-  $('accessoryAnalysis').innerHTML='<div class="card"><h2>🪛 付属品アップセル</h2><p class="muted">上の期間・絞り込みに一致するギター・ベースの注文を集計。付属品利益には販売時に選んだ販路の手数料を反映し、送料は引きません。売上・利益は上の総額にも含まれ、カテゴリ別集計は本体のカテゴリに含めます。平均販売日数は本体だけで計算します。</p><div class="kpis small"><div class="kpi sm"><div class="n">'+yen(units)+'点</div><div class="l">付属品販売数</div></div><div class="kpi sm blue"><div class="n">'+yen(revenue)+'円</div><div class="l">付属品売上</div></div><div class="kpi sm green"><div class="n">'+yen(profit)+'円</div><div class="l">付属品利益</div></div><div class="kpi sm orange"><div class="n">'+(mains.length?Math.round(attached.length/mains.length*1000)/10:0)+'%</div><div class="l">同梱率（'+attached.length+'/'+mains.length+'注文）</div></div></div><div class="acc-table-wrap" style="margin-top:12px"><table><tr><th>商品ID・商品名</th><th>販売数</th><th>売上</th><th>販路手数料</th><th>利益</th><th>送料</th></tr>'+Object.keys(groups).map(function(k){var g=groups[k];return '<tr><td>'+esc(g.sku+'｜'+g.name)+'</td><td>'+g.qty+'点</td><td>'+yen(g.revenue)+'円</td><td>'+yen(g.fee)+'円</td><td>'+profitHtml(g.profit)+'</td><td>0円</td></tr>';}).join('')+(lines.length?'':'<tr><td colspan="6" class="muted">この条件での付属品販売はありません。</td></tr>')+'</table></div></div>';}
+  $('accessoryAnalysis').innerHTML='<div class="card"><h2>🪛 付属品アップセル</h2><p class="muted">上の期間・絞り込みに一致するギター・ベースの注文を集計。付属品利益には販売時に選んだ販路の手数料を反映し、送料は引きません。売上・利益は上の総額にも含まれ、カテゴリ別集計は本体のカテゴリに含めます。平均販売日数は本体だけで計算します。</p><div class="kpis small"><div class="kpi sm"><div class="n">'+yen(units)+'点</div><div class="l">付属品販売数</div></div><div class="kpi sm blue"><div class="n">'+yen(revenue)+'円</div><div class="l">付属品売上</div></div><div class="kpi sm green"><div class="n">'+yen(profit)+'円</div><div class="l">付属品利益</div></div><div class="kpi sm orange"><div class="n">'+(mains.length?Math.round(attached.length/mains.length*1000)/10:0)+'%</div><div class="l">同梱率（'+attached.length+'/'+mains.length+'注文）</div></div></div><div class="acc-table-wrap" style="margin-top:12px"><table><tr><th>商品ID・商品名</th><th>販売数</th><th>売上</th><th>販路手数料</th><th>利益</th><th>送料</th></tr>'+Object.keys(groups).map(function(k){var g=groups[k];return '<tr><td>'+esc(g.sku+'｜'+g.name)+'</td><td>'+g.qty+'点</td><td>'+yen(g.revenue)+'円</td><td>'+yen(g.fee)+'円</td><td>'+profitHtml(g.profit)+'</td><td>0円</td></tr>';}).join('')+(lines.length?'':'<tr><td colspan="6" class="muted">この条件での付属品販売はありません。</td></tr>')+'</table></div></div>';
+  var solo=items.filter(function(x){return x.isStandaloneAccessorySale;}),soloTotal=solo.reduce(function(n,x){n.qty+=x.qty;n.revenue+=Number(x.salePrice)||0;n.cost+=Number(x.cost)||0;n.fee+=x.fee;n.shipping+=x.shipping;n.profit+=Number(x.profit)||0;return n;},{qty:0,revenue:0,cost:0,fee:0,shipping:0,profit:0});
+  $('accessoryAnalysis').innerHTML+='<div class="card"><h2>🪛 付属品の単品販売</h2><p class="muted">上の期間・絞り込みに一致する単品注文を集計。販路手数料と送料を付属品の利益から引き、販売時の金額で確定します。売上・利益は上の総額にも含まれます。</p><div class="kpis small"><div class="kpi sm"><div class="n">'+solo.length+'件 / '+yen(soloTotal.qty)+'点</div><div class="l">単品注文</div></div><div class="kpi sm blue"><div class="n">'+yen(soloTotal.revenue)+'円</div><div class="l">売上</div></div><div class="kpi sm green"><div class="n">'+yen(soloTotal.profit)+'円</div><div class="l">利益</div></div></div><div class="acc-table-wrap" style="margin-top:12px"><table><tr><th>注文ID・商品</th><th>数量</th><th>売上</th><th>原価</th><th>販路手数料</th><th>送料</th><th>利益</th></tr>'+solo.map(function(x){return '<tr><td>'+esc(x.id+'｜'+x.name)+'</td><td>'+yen(x.qty)+'点</td><td>'+yen(x.salePrice)+'円</td><td>'+yen(x.cost)+'円</td><td>'+yen(x.fee)+'円</td><td>'+yen(x.shipping)+'円</td><td>'+profitHtml(x.profit)+'</td></tr>';}).join('')+(solo.length?'':'<tr><td colspan="7" class="muted">この条件での単品販売はありません。</td></tr>')+'</table></div></div>';}
 function demoItem(id,category,maker,name,cost,price,status,listDate,saleDate,channel,profit,shipPattern){return {id:id,category:category,subCategory:category==='ベース'?'エレキベース':(category==='ギター'?'エレキギター':'歪み系'),maker:maker,name:name,condition:'目立った傷や汚れなし',opCondition:'完動品',accessory:'',staff:'担当A',cost:cost,buyDate:'2026/08/10',photo:'',status:status,listDate:listDate,shipPattern:shipPattern||'',prices:{'メルカリ':price},home:false,shipCheck:false,channel:channel||'',salePrice:status==='売却済み'?price:'',profit:status==='売却済み'?profit:'',shipDate:saleDate||'',saleDate:saleDate||'',note:'',listings:{}};}
 function demoState(){var d=defaultState();d.settings.shipPatterns.push({name:'大型宅急便',amount:1700,method:'宅急便'});d.settings.channelShipDefault=[{channel:'メルカリ',shipPattern:'大型宅急便'},{channel:'ヤフフリマ',shipPattern:'大型宅急便'}];
   d.items=[demoItem('G0001','ギター','Fender','Player Stratocaster',52000,79800,'売却済み','2026/08/15','2026/09/29','メルカリ',18120,'大型宅急便'),demoItem('B0001','ベース','Ibanez','SR500E',46000,69800,'売却済み','2026/08/20','2026/09/28','ヤフフリマ',19210,'大型宅急便'),demoItem('G0002','ギター','YAMAHA','REVSTAR RSE20',38000,59800,'販売中','2026/09/05','','','', '大型宅急便'),demoItem('B0002','ベース','Fender','Player Precision Bass',49500,73900,'販売中','2026/09/12','','','', '大型宅急便'),demoItem('E0001','エフェクター','BOSS','DS-1 Distortion',4000,8980,'販売中','2026/09/15','','','', '宅急便60')];
