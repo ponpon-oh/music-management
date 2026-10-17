@@ -235,7 +235,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-17a</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-17b</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -1347,25 +1347,29 @@ function anDrill(i){var o=AN_ROWS[i];if(!o)return;var k=(o.key==='(未設定)')?
   loadAnalysis();}
 
 function stockTurnoverStats(days,asOf){
-  var sold=0,soldWithin=0,activeOverdue=0,activePending=0,missingDates=0,now=asOf||todayStr();
+  var sold=0,soldWithin=0,activeSelling=0,activeNotDue=0,missingDates=0,now=asOf||todayStr();
   STOCK.forEach(function(x){
     if(x.status!=='売却済み'&&x.status!=='販売中')return;
     if(anF.cat&&x.category!==anF.cat)return;
     if(anF.sub&&(x.subCategory||'')!==anF.sub)return;
     if(anF.staff&&(x.staff||'')!==anF.staff)return;
-    var age=daysBetween(x.listDate,x.status==='売却済み'?x.saleDate:now);
-    if(age==null||age<0||daysBetween(x.status==='売却済み'?x.saleDate:x.listDate,now)<0){missingDates++;return;}
-    if(x.status==='売却済み'){sold++;if(age<=days)soldWithin++;}
-    else if(age>=days)activeOverdue++;
-    else activePending++;
+    if(x.status==='販売中'){
+      activeSelling++;
+      var activeAge=daysBetween(x.listDate,now);
+      if(activeAge==null||activeAge<days)activeNotDue++;
+      return;
+    }
+    var age=daysBetween(x.listDate,x.saleDate);
+    if(age==null||age<0||daysBetween(x.saleDate,now)<0){missingDates++;return;}
+    sold++;if(age<=days)soldWithin++;
   });
-  var eligible=sold+activeOverdue;
-  return {days:days,sold:sold,soldWithin:soldWithin,activeOverdue:activeOverdue,activePending:activePending,missingDates:missingDates,eligible:eligible,rate:eligible?Math.round(soldWithin/eligible*1000)/10:null};
+  var eligible=sold+activeSelling;
+  return {days:days,sold:sold,soldWithin:soldWithin,activeSelling:activeSelling,activeNotDue:activeNotDue,missingDates:missingDates,eligible:eligible,rate:eligible?Math.round(soldWithin/eligible*1000)/10:null};
 }
 function stockTurnoverHtml(){
   var defs=[[30,'1カ月以内在庫回転率'],[90,'3カ月以内在庫回転率'],[180,'6カ月以内在庫回転率']],stats=defs.map(function(d){return {label:d[1],value:stockTurnoverStats(d[0])};});
-  return '<div class="card"><h3>📦 在庫回転率（本体商品）</h3><div class="kpis small">'+stats.map(function(o){var s=o.value;return '<div class="kpi sm blue"><div class="n">'+(s.rate==null?'—':s.rate+'%')+'</div><div class="l">'+o.label+'</div><div class="muted">'+s.soldWithin+'件 ÷ '+s.eligible+'件（売却済み '+s.sold+'件＋期限を過ぎた販売中 '+s.activeOverdue+'件）<br>判定前の販売中 '+s.activePending+'件・日付不備 '+s.missingDates+'件</div></div>';}).join('')+'</div>'
-    +'<p class="muted">販売開始日から売却日までが30・90・180日以内の売却済み商品を数えます。分母には売却済み商品と、販売開始から各期限を過ぎても「販売中」の商品を含めます。期限前の販売中商品は判定を保留します。日付が不足・不正な商品は除外します。カテゴリ・小カテゴリ・担当者の絞り込みは反映します。現在の在庫状態を基準にするため、上の期間指定と販路の絞り込みは適用しません。</p></div>';
+  return '<div class="card"><h3>📦 在庫回転率（本体商品）</h3><div class="kpis small">'+stats.map(function(o){var s=o.value;return '<div class="kpi sm blue"><div class="n">'+(s.rate==null?'—':s.rate+'%')+'</div><div class="l">'+o.label+'</div><div class="muted">'+s.soldWithin+'件 ÷ '+s.eligible+'件（売却済み '+s.sold+'件＋販売中 '+s.activeSelling+'件）<br>販売中のうち期限前・日付なし '+s.activeNotDue+'件／売却済みの日付不備 '+s.missingDates+'件</div></div>';}).join('')+'</div>'
+    +'<p class="muted">販売開始日から売却日までが30・90・180日以内の売却済み商品を数えます。分母には売却済み商品と現在「販売中」の商品をすべて含めます。販売中は開始日が未設定でも分母に含め、売却済みは日付が不足・不正なら除外します。カテゴリ・小カテゴリ・担当者の絞り込みは反映します。現在の在庫状態を基準にするため、上の期間指定と販路の絞り込みは適用しません。</p></div>';
 }
 function loadAnalysis(){
   if(!CFG||!$('analysisBody'))return;
