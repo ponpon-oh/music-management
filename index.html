@@ -235,7 +235,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-08b</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-17a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -1346,6 +1346,27 @@ function anDrill(i){var o=AN_ROWS[i];if(!o)return;var k=(o.key==='(未設定)')?
   else if(anAxis==='channel'){anF.ch=k;anAxis='month';}
   loadAnalysis();}
 
+function stockTurnoverStats(days,asOf){
+  var sold=0,soldWithin=0,activeOverdue=0,activePending=0,missingDates=0,now=asOf||todayStr();
+  STOCK.forEach(function(x){
+    if(x.status!=='売却済み'&&x.status!=='販売中')return;
+    if(anF.cat&&x.category!==anF.cat)return;
+    if(anF.sub&&(x.subCategory||'')!==anF.sub)return;
+    if(anF.staff&&(x.staff||'')!==anF.staff)return;
+    var age=daysBetween(x.listDate,x.status==='売却済み'?x.saleDate:now);
+    if(age==null||age<0||daysBetween(x.status==='売却済み'?x.saleDate:x.listDate,now)<0){missingDates++;return;}
+    if(x.status==='売却済み'){sold++;if(age<=days)soldWithin++;}
+    else if(age>=days)activeOverdue++;
+    else activePending++;
+  });
+  var eligible=sold+activeOverdue;
+  return {days:days,sold:sold,soldWithin:soldWithin,activeOverdue:activeOverdue,activePending:activePending,missingDates:missingDates,eligible:eligible,rate:eligible?Math.round(soldWithin/eligible*1000)/10:null};
+}
+function stockTurnoverHtml(){
+  var defs=[[30,'1カ月以内在庫回転率'],[90,'3カ月以内在庫回転率'],[180,'6カ月以内在庫回転率']],stats=defs.map(function(d){return {label:d[1],value:stockTurnoverStats(d[0])};});
+  return '<div class="card"><h3>📦 在庫回転率（本体商品）</h3><div class="kpis small">'+stats.map(function(o){var s=o.value;return '<div class="kpi sm blue"><div class="n">'+(s.rate==null?'—':s.rate+'%')+'</div><div class="l">'+o.label+'</div><div class="muted">'+s.soldWithin+'件 ÷ '+s.eligible+'件（売却済み '+s.sold+'件＋期限を過ぎた販売中 '+s.activeOverdue+'件）<br>判定前の販売中 '+s.activePending+'件・日付不備 '+s.missingDates+'件</div></div>';}).join('')+'</div>'
+    +'<p class="muted">販売開始日から売却日までが30・90・180日以内の売却済み商品を数えます。分母には売却済み商品と、販売開始から各期限を過ぎても「販売中」の商品を含めます。期限前の販売中商品は判定を保留します。日付が不足・不正な商品は除外します。カテゴリ・小カテゴリ・担当者の絞り込みは反映します。現在の在庫状態を基準にするため、上の期間指定と販路の絞り込みは適用しません。</p></div>';
+}
 function loadAnalysis(){
   if(!CFG||!$('analysisBody'))return;
   buildAnModeBtns();buildAnPeriodBtns();buildAnAxisBtns();buildAnFilters();
@@ -1366,6 +1387,7 @@ function loadAnalysis(){
    +'<div class="kpi sm green"><div class="n">'+yen(items.length?Math.round(tp/items.length):0)+'円</div><div class="l">1件あたり平均利益</div></div>'
    +'<div class="kpi sm orange"><div class="n">'+(dn?Math.round(dsum/dn)+'日':'—')+'</div><div class="l">平均販売日数（本体のみ）</div></div>'
    +'</div>'
+   +stockTurnoverHtml()
    +'<div class="card" style="margin-top:12px"><h3>'+esc(anAxisLabel(anAxis))+'</h3>'
    +(AN_ROWS.length?'<div style="height:'+h+'px"><canvas id="anChart"></canvas></div>':'<div class="loading">この条件のデータはありません</div>')
    +'</div>'
@@ -1455,7 +1477,11 @@ function purchaseKeyOf(x,axis){
 function purchaseGroup(items,axis){
   var m={};items.forEach(function(x){var k=purchaseKeyOf(x,axis),g=m[k]||(m[k]={key:k,count:0,qty:0,amount:0});g.count++;g.qty+=x.qty;g.amount+=x.amount;});
   var rows=Object.keys(m).map(function(k){var g=m[k];g.avg=g.qty?Math.round(g.amount/g.qty):0;return g;});
-  if(axis==='month')rows.sort(function(a,b){return a.key==='(未設定)'?1:(b.key==='(未設定)'?-1:(a.key<b.key?-1:(a.key>b.key?1:0)));});
+  if(axis==='month'){
+    rows=rows.filter(function(x){return x.key!=='(未設定)';});
+    rows.sort(function(a,b){return a.key<b.key?-1:(a.key>b.key?1:0);});
+    rows.excluded=m['(未設定)']||{count:0,qty:0,amount:0};
+  }
   else rows.sort(function(a,b){return b.amount-a.amount;});
   return rows;
 }
@@ -1467,7 +1493,8 @@ function loadPurchaseAnalysis(){
   if(anChart){anChart.destroy();anChart=null;}
   $('analysisBody').innerHTML='<div class="hero"><div class="l">'+esc(anLabel)+(fl.length?'　【'+esc(fl.join(' / '))+'】':'')+' の仕入金額</div><div class="n">'+yen(total.amount)+' 円</div><div class="s">仕入明細 '+items.length+'件 ・ 仕入数量 '+yen(total.qty)+'点</div></div>'
     +'<div class="kpis small"><div class="kpi sm blue"><div class="n">'+yen(total.amount)+'円</div><div class="l">仕入金額</div></div><div class="kpi sm"><div class="n">'+items.length+'件</div><div class="l">仕入明細</div></div><div class="kpi sm orange"><div class="n">'+yen(total.qty)+'点</div><div class="l">仕入数量</div></div></div>'
-    +'<p class="muted">本体は全ステータスの商品を仕入日・現在登録されている仕入価格で集計します。付属品は初回・追加仕入れの履歴から、数量×当時の単価で集計します。販路は仕入時点では未確定のため対象外です。日付が空欄の本体と、年が記録されていない旧形式の付属品履歴は、全期間の「未設定」に含め、期間指定中は除外します。</p>'
+    +'<p class="muted">本体は全ステータスの商品を仕入日・現在登録されている仕入価格で集計します。付属品は初回・追加仕入れの履歴から、数量×当時の単価で集計します。販路は仕入時点では未確定のため対象外です。仕入日がない明細は全期間の総額・明細に含めますが、月ごとの推移・内訳・CSVには表示しません。期間指定中は総額からも除外します。</p>'
+    +(anAxis==='month'&&AN_ROWS.excluded&&AN_ROWS.excluded.count?'<p class="muted">仕入日未設定の '+AN_ROWS.excluded.count+' 件・'+yen(AN_ROWS.excluded.amount)+'円は、月別の表・グラフ・CSVから除外しています。</p>':'')
     +'<div class="card" style="margin-top:12px"><h3>'+esc(anAxisLabel(anAxis))+'</h3>'+(AN_ROWS.length?'<div style="height:'+h+'px"><canvas id="anChart"></canvas></div>':'<div class="loading">この条件の仕入れデータはありません</div>')+'</div>'
     +purchaseTable(AN_ROWS)
     +'<div class="card"><div style="cursor:pointer" onclick="toggleAnDetail()"><b>📄 仕入明細（'+items.length+'件）</b> <span>'+(anDetailOpen?'▲':'▼')+'</span></div><div style="display:'+(anDetailOpen?'block':'none')+';margin-top:8px;overflow-x:auto">'+(anDetailOpen?purchaseDetailTable(items):'')+'</div></div>';
@@ -1480,7 +1507,7 @@ function purchaseTable(rows){
   var body=rows.map(function(o,i){sum.count+=o.count;sum.qty+=o.qty;sum.amount+=o.amount;
     var attr=isM?'':' class="anrow" style="cursor:pointer" onclick="anDrill('+i+')"';
     return '<tr'+attr+'><td>'+esc(isM?monthLabel(o.key):o.key)+'</td><td>'+o.count+'</td><td>'+yen(o.qty)+'</td><td>'+yen(o.amount)+'円</td><td>'+yen(o.avg)+'円</td></tr>';}).join('');
-  return '<div class="card"><h3>'+esc(anAxisLabel(anAxis))+' の仕入内訳</h3>'+(isM?'<p class="muted">仕入日を基準に集計しています。</p>':'<p class="muted">行をタップすると、その区分でさらに詳しく見られます。</p>')
+  return '<div class="card"><h3>'+esc(anAxisLabel(anAxis))+' の仕入内訳</h3>'+(isM?'<p class="muted">仕入日を基準に集計しています。'+(rows.excluded&&rows.excluded.count?'仕入日未設定の '+rows.excluded.count+' 件・'+yen(rows.excluded.amount)+'円は月別表示から除外し、上の全期間合計と仕入明細には含めています。':'')+'</p>':'<p class="muted">行をタップすると、その区分でさらに詳しく見られます。</p>')
     +'<div style="overflow-x:auto"><table><tr><th>'+(isM?'月':'区分')+'</th><th>明細件数</th><th>仕入数量</th><th>仕入金額</th><th>平均仕入単価</th></tr>'+body
     +'<tr style="background:#f7f9fa;font-weight:700"><td>合計</td><td>'+sum.count+'</td><td>'+yen(sum.qty)+'</td><td>'+yen(sum.amount)+'円</td><td>'+yen(sum.qty?Math.round(sum.amount/sum.qty):0)+'円</td></tr></table></div>'
     +'<div style="margin-top:10px"><button class="btn ghost sm" onclick="purchaseCsv()">⬇ この表をCSVで保存</button></div></div>';
