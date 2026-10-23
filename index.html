@@ -128,7 +128,7 @@
       <div id="stockSummary" class="summary"></div>
       <div class="row" style="align-items:flex-end">
         <div><label>検索</label><input id="mSearch" oninput="renderManage()" placeholder="ID・商品名・メーカー"></div>
-        <div style="max-width:190px"><label>並び替え</label><select id="mSort" onchange="renderManage()"><option value="">既定（登録順）</option><option value="pdesc">販売期間が長い順</option><option value="pasc">販売期間が短い順</option></select></div>
+        <div style="max-width:190px"><label>並び替え</label><select id="mSort" onchange="renderManage()"><option value="pasc" selected>販売期間が短い順</option><option value="pdesc">販売期間が長い順</option><option value="id">商品ID順</option><option value="">登録順</option></select></div>
         <div style="max-width:100px"><label>期間 最小(日)</label><input type="number" id="pMin" oninput="renderManage()"></div>
         <div style="max-width:100px"><label>最大(日)</label><input type="number" id="pMax" oninput="renderManage()"></div>
         <div style="flex:0"><button class="btn ghost sm" onclick="reloadData()">更新</button></div>
@@ -236,7 +236,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-17d</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-23a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -462,8 +462,8 @@ function buildDataLists(){
 function purchaseRowInner(){
   return '<div class="row"><div><label>カテゴリ</label><select class="b-cat" onchange="syncField(this)">'+opt(catNames())+'</select></div>'
       +'<div class="sub-wrap"><label>小カテゴリ</label><select class="b-sub"></select></div>'
-      +'<div><label>メーカー名</label><input class="b-maker" list="dl-maker" autocomplete="off"></div>'
-      +'<div style="flex:2"><label>商品名</label><input class="b-name" list="dl-name" autocomplete="off"></div></div>'
+      +'<div><label>メーカー名</label><input class="b-maker" autocomplete="off"></div>'
+      +'<div style="flex:2"><label>商品名</label><input class="b-name" autocomplete="off"></div></div>'
     +'<div class="row"><div><label>仕入価格（円）</label><input type="number" class="b-cost"></div>'
       +'<div><label>状態</label><select class="b-cond">'+opt(CFG.conditions||["新品、未使用","未使用に近い","目立った傷や汚れなし","やや傷や汚れあり","傷や汚れあり","全体的に状態が悪い"])+'</select></div>'
       +'<div><label>動作状態</label><select class="b-op">'+opt(CFG.opConditions)+'</select></div>'
@@ -473,12 +473,49 @@ function purchaseRowInner(){
       +'<div><label>ステータス</label><select class="b-status">'+opt(CFG.statuses)+'</select></div>'
       +'<div style="flex:2"><label>&nbsp;</label><div class="flags"><label><input type="checkbox" class="b-home"> 🏠自宅保管</label><label><input type="checkbox" class="b-chk"> 📮送料確認</label></div></div></div>';
 }
+var buySuggestionIndex={},buySuggestionSeq=0,buySuggestionsDirty=true;
+function suggestionKey(s){return String(s||'').normalize('NFKC').toLocaleLowerCase('en');}
+function rebuildBuySuggestionIndex(){
+  var groups={},collator=new Intl.Collator('ja',{numeric:true});
+  STOCK.forEach(function(x){
+    var cat=String(x.category||''),g=groups[cat];
+    if(!g)g=groups[cat]={maker:[],name:[],makerSeen:Object.create(null),nameSeen:Object.create(null)};
+    ['maker','name'].forEach(function(kind){var value=String(x[kind]||'').trim(),key=suggestionKey(value);
+      if(value&&!g[kind+'Seen'][key]){g[kind+'Seen'][key]=true;g[kind].push({value:value,key:key});}});
+  });
+  Object.keys(groups).forEach(function(cat){['maker','name'].forEach(function(kind){groups[cat][kind].sort(function(a,b){return collator.compare(a.value,b.value);});});});
+  buySuggestionIndex=groups;buySuggestionsDirty=false;
+}
+function ensureBuySuggestionIndex(){if(buySuggestionsDirty)rebuildBuySuggestionIndex();}
+function buySuggestionMatches(category,kind,query){
+  ensureBuySuggestionIndex();
+  var g=buySuggestionIndex[category],choices=g&&g[kind]||[],key=suggestionKey(String(query||'').trim()),out=[];
+  for(var i=0;i<choices.length&&out.length<40;i++){if(!key||choices[i].key.indexOf(key)>=0)out.push(choices[i].value);}
+  return out;
+}
+function updateBuySuggestions(row,kind){
+  var input=row.querySelector('.b-'+kind),list=document.getElementById(input.getAttribute('list'));
+  if(!list)return;
+  list.innerHTML=buySuggestionMatches(row.querySelector('.b-cat').value,kind,input.value).map(function(value){return '<option value="'+esc(value)+'"></option>';}).join('');
+}
+function wireBuySuggestions(row){
+  var seq=++buySuggestionSeq,cat=row.querySelector('.b-cat');
+  ['maker','name'].forEach(function(kind){
+    var input=row.querySelector('.b-'+kind),list=document.createElement('datalist');
+    list.id='buy-'+kind+'-suggestions-'+seq;input.parentNode.appendChild(list);input.setAttribute('list',list.id);
+    input.addEventListener('focus',function(){updateBuySuggestions(row,kind);});
+    input.addEventListener('input',function(){updateBuySuggestions(row,kind);});
+    input.addEventListener('change',function(){ensureBuySuggestionIndex();var g=buySuggestionIndex[cat.value],choices=g&&g[kind]||[],key=suggestionKey(input.value.trim());
+      for(var i=0;i<choices.length;i++){if(choices[i].key===key){input.value=choices[i].value;break;}}});
+  });
+  cat.addEventListener('change',function(){updateBuySuggestions(row,'maker');updateBuySuggestions(row,'name');});
+}
 function wirePurchaseRow(d){
   d.querySelector('.b-op').onchange=function(){syncOpStatus(this);};
   syncField(d.querySelector('.b-cat'));syncOpStatus(d.querySelector('.b-op'));
+  wireBuySuggestions(d);
 }
 function addBuyRow(){
-  buildDataLists();
   var d=document.createElement('div');d.className='purchase-row';
   d.innerHTML='<button class="del" onclick="this.parentNode.remove()">×</button>'+purchaseRowInner();
   $('buyRows').appendChild(d);
@@ -488,7 +525,6 @@ function toggleManualAdd(){
   var box=$('manualAddBox');
   if(!box)return;
   if(box.style.display==='none'){
-    buildDataLists();
     box.style.display='block';
     box.innerHTML='<div class="purchase-row" id="manualAddRow" style="border-color:var(--brand2)">'+purchaseRowInner()+'</div>'
       +'<div style="margin-top:8px"><button class="btn sm" onclick="submitManualAdd()">登録する</button> <button class="btn ghost sm" onclick="toggleManualAdd()">閉じる</button></div>';
@@ -988,7 +1024,7 @@ function normalize(o){var d=defaultState();o=o||{};o.settings=Object.assign({},d
 function validStatePayload(o){return !!o&&typeof o==='object'&&!Array.isArray(o)&&Array.isArray(o.items);}
 function loadState(){var raw=localStorage.getItem(KEY);if(raw==null||raw==='')return DEMO_MODE?demoState():defaultState();var s;try{s=JSON.parse(raw);}catch(e){throw new Error('保存データのJSON解析に失敗');}if(!validStatePayload(s))throw new Error('保存データの形式が不正');return normalize(s);}
 function downloadRawState(){var raw=localStorage.getItem(KEY);if(raw==null){alert('この端末に保存データがありません');return;}var blob=new Blob([raw],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='中古販売_読込エラー原文_'+todayStr().replace(/\//g,'')+'.txt';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);}
-function save(){localStorage.setItem(KEY,JSON.stringify(state));schedulePush();}
+function save(){buySuggestionsDirty=true;localStorage.setItem(KEY,JSON.stringify(state));schedulePush();}
 function nowStr(){var d=new Date(),p=function(n){return ('0'+n).slice(-2);};return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate())+' '+p(d.getHours())+':'+p(d.getMinutes());}
 function setSync(t){var el=document.getElementById('who');if(el)el.textContent=t;}
 
@@ -998,7 +1034,7 @@ function buildCFG(){var s=state.settings;var subs={};s.subcategories.forEach(fun
     channels:s.channels.map(function(c){return {'販路名':c.name,'手数料率(%)':Number(c.fee)};}),shipMethodNames:s.shipMethods.slice(),
     shipPatterns:s.shipPatterns.map(function(p){return {name:p.name,amount:Number(p.amount)||0,method:p.method};}),statuses:s.statuses.slice(),opConditions:s.opConditions.slice(),opNoteTargets:(s.opNoteTargets||[]).slice(),catDefaults:(s.catDefaults||[]).slice(),opStatusMap:(s.opStatusMap||[]).slice(),channelShipDefault:(s.channelShipDefault||[]).slice(),
     periodColors:s.periodColors.map(function(r){return {min:Number(r.min)||0,max:(r.max==null||r.max===''?99999:Number(r.max)),color:r.color,basis:r.basis||''};}),conditions:CONDITIONS};}
-function rebuildAll(){CFG=buildCFG();STOCK=state.items;STOCK.forEach(function(x){if(!x.listings||typeof x.listings!=='object')x.listings={};});STOCK.forEach(computeProfits);fillSelectors();renderDelist();renderManage();renderShipList();renderDash(dashFromStock());renderAccessories();if(document.getElementById('v-analysis').classList.contains('active'))loadAnalysis();if(document.getElementById('v-settings').classList.contains('active'))renderSettings();refreshOpenLogs();}
+function rebuildAll(){CFG=buildCFG();STOCK=state.items;buySuggestionsDirty=true;STOCK.forEach(function(x){if(!x.listings||typeof x.listings!=='object')x.listings={};});STOCK.forEach(computeProfits);fillSelectors();renderDelist();renderManage();renderShipList();renderDash(dashFromStock());renderAccessories();if(document.getElementById('v-analysis').classList.contains('active'))loadAnalysis();if(document.getElementById('v-settings').classList.contains('active'))renderSettings();refreshOpenLogs();}
 function nextId(prefix){var mx=state.counters[prefix]||0;var re=new RegExp('^'+prefix+'(\\d+)$');state.items.forEach(function(x){var m=re.exec(x.id);if(m)mx=Math.max(mx,parseInt(m[1],10));});var n=mx+1;state.counters[prefix]=n;return prefix+('0000'+n).slice(-4);}
 function logAction(type,itemId,name,detail,revert){state.logs.push({id:++state.logSeq,at:nowStr(),type:type,item_id:itemId,name:name,detail:detail,state:'有効',revert:revert||null});}
 function applyRevert(it,rev){Object.keys(rev).forEach(function(k){it[k]=rev[k];});}
@@ -1258,7 +1294,8 @@ function toggleStatus(st){
   buildStatusBtns();renderManage();}
 function clearStatus(){statusFilter=[];buildStatusBtns();renderManage();}
 function toggleStatusMulti(cb){statusMultiMode=!!cb.checked;if(!statusMultiMode&&statusFilter.length>1)statusFilter=statusFilter.slice(0,1);buildStatusBtns();renderManage();}
-function sortList(list){var m=document.getElementById('mSort'),v=m?m.value:'';if(!v)return list;
+function sortList(list){var m=document.getElementById('mSort'),v=m?m.value:'pasc';if(!v)return list;
+  if(v==='id')return list.slice().sort(function(a,b){return String(a.id||'').localeCompare(String(b.id||''),'ja',{numeric:true});});
   return list.slice().sort(function(a,b){var pa=salePeriod(a),pb=salePeriod(b);
     if(pa==null&&pb==null)return 0;if(pa==null)return 1;if(pb==null)return -1;
     return v==='pdesc'?(pb-pa):(pa-pb);});}
