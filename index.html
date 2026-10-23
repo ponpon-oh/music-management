@@ -39,6 +39,12 @@
   table{width:100%;border-collapse:collapse;font-size:13px} th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)} th{color:var(--sub);font-weight:600}
   .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;background:#eceff1;color:#607d8b}
   #unlistedBadge{border:0;cursor:pointer;padding:6px 10px;font-size:13px}
+  .duplicate-badge{border:1px solid #ef9a9a;background:#ffebee;color:#b71c1c;cursor:pointer;padding:5px 9px;font-size:12px}
+  .duplicate-detail,.duplicate-register{width:100%;background:#fff8f7;border:1px solid #ffcdd2;border-radius:8px;padding:10px;font-size:13px}
+  .duplicate-peer{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 0;border-top:1px solid #f1d8d8}
+  .duplicate-peer:first-of-type{border-top:0}
+  .duplicate-link{border:0;background:none;color:var(--brand);font:inherit;font-weight:700;cursor:pointer;text-decoration:underline;padding:2px}
+  .duplicate-register input{max-width:360px}
   .copyable{cursor:pointer;border-bottom:1px dashed currentColor;text-decoration:none}
   .copyable:active{opacity:.6}
   .pill.未販売{background:#e0f2f1;color:#00695c}.pill.販売中{background:#ffcdd2;color:#c62828}.pill.売却済み{background:#e0e0e0;color:#616161}
@@ -140,7 +146,7 @@
         <label class="switch" style="margin:0"><input type="checkbox" id="statusMulti" onchange="toggleStatusMulti(this)"> 複数選択（OR検索）</label>
       </div>
       <div class="catbtns" id="statusBtns"></div>
-      <div class="catbtns"><button id="fbHome" onclick="toggleFlag('home',this)">🏠 自宅保管のみ</button><button id="fbChk" onclick="toggleFlag('chk',this)">📮 送料確認のみ</button></div>
+      <div class="catbtns"><button id="fbHome" onclick="toggleFlag('home',this)">🏠 自宅保管のみ</button><button id="fbChk" onclick="toggleFlag('chk',this)">📮 送料確認のみ</button><button id="duplicateOnlyBtn" onclick="toggleDuplicateOnly(this)" aria-pressed="false">⚠ 重複候補のみ</button></div>
       <label class="switch" style="margin-top:10px"><input type="checkbox" id="showImg" onchange="renderManage()"> 🖼 画像を表示する</label>
       <div class="hr"></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -236,7 +242,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-23a</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-23b</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -280,7 +286,7 @@
 /* ====== 設定：Supabaseの接続情報をここに貼り付け ====== */
 /* ==================================================== */
 
-var CFG=null, STOCK=[], SEL={}, manageCat='すべて', filterHome=false, filterChk=false, openSet={}, monthlyChart=null, chChart=null, photoTargetId=null, USER=null;
+var CFG=null, STOCK=[], SEL={}, manageCat='すべて', filterHome=false, filterChk=false, duplicateOnly=false, duplicateOpenSet={}, duplicateRegisterOpenSet={}, openSet={}, monthlyChart=null, chChart=null, photoTargetId=null, USER=null;
 var COLORMAP={'赤':'#e53935','橙':'#fb8c00','黄':'#f9a825','緑':'#43a047','青':'#1e88e5','紫':'#8e24aa','グレー':'#9e9e9e'};
 var COLOR_KEYS=['赤','橙','黄','緑','青','紫','グレー'];
 
@@ -601,12 +607,48 @@ async function submitPurchase(){
 /* ====== 在庫管理 ====== */
 function match(x,q){q=q.toLowerCase();return (x.id+' '+x.name+' '+x.maker+' '+x.category+' '+(x.subCategory||'')).toLowerCase().indexOf(q)>=0;}
 function optPattern(sel){return '<option value=""></option>'+CFG.shipPatterns.map(function(p){return '<option value="'+esc(p.name)+'"'+(p.name===sel?' selected':'')+'>'+esc(p.name)+'（'+yen(p.amount)+'円/'+esc(p.method)+'）</option>';}).join('');}
+function duplicateText(s){return String(s==null?'':s).normalize('NFKC').toLocaleLowerCase('en').replace(/\s+/g,' ').trim();}
+function duplicateKey(x){var name=duplicateText(x.name);return name?JSON.stringify([duplicateText(x.category),duplicateText(x.maker),name]):'';}
+function duplicatePairKey(a,b){return JSON.stringify([a,b].sort());}
+function buildDuplicateIndex(items,links){
+  var active=(items||[]).filter(function(x){return x&&x.status!=='売却済み'&&x.id!=null;});
+  var byActiveId=new Map(),parent=new Map(),sizes=new Map(),byKey=new Map(),keyCounts=new Map(),manualPairs=new Set(),manualEdges=[];
+  active.forEach(function(x){var id=String(x.id);byActiveId.set(id,x);parent.set(id,id);sizes.set(id,1);});
+  function root(id){var p=parent.get(id);if(p!==id){p=root(p);parent.set(id,p);}return p;}
+  function union(a,b){a=root(a);b=root(b);if(a===b)return;if(sizes.get(a)<sizes.get(b)){var t=a;a=b;b=t;}parent.set(b,a);sizes.set(a,sizes.get(a)+sizes.get(b));}
+  active.forEach(function(x){var key=duplicateKey(x);if(!key)return;keyCounts.set(key,(keyCounts.get(key)||0)+1);if(byKey.has(key))union(String(x.id),byKey.get(key));else byKey.set(key,String(x.id));});
+  (links||[]).forEach(function(link){if(!link||typeof link.a!=='string'||typeof link.b!=='string'||link.a===link.b||!byActiveId.has(link.a)||!byActiveId.has(link.b))return;manualPairs.add(duplicatePairKey(link.a,link.b));manualEdges.push(link.a);union(link.a,link.b);});
+  var groups=new Map(),byId=new Map(),groupCount=0,manualRoots=new Set();
+  manualEdges.forEach(function(id){manualRoots.add(root(id));});
+  active.forEach(function(x){var r=root(String(x.id));if(!groups.has(r))groups.set(r,[]);groups.get(r).push(x);});
+  groups.forEach(function(group,r){if(group.length<2)return;groupCount++;group.sort(function(a,b){return String(a.id).localeCompare(String(b.id),'ja',{numeric:true});});var hasAuto=group.some(function(x){return (keyCounts.get(duplicateKey(x))||0)>1;});var hasManual=manualRoots.has(r);group.forEach(function(x){byId.set(String(x.id),{group:group,source:hasAuto&&hasManual?'自動＋手動':(hasManual?'手動':'自動')});});});
+  return {byId:byId,activeById:byActiveId,manualPairs:manualPairs,groupCount:groupCount};
+}
+function duplicateDetailHtml(x,info,index){var shown=[];for(var i=0;i<info.group.length&&shown.length<50;i++){if(info.group[i].id!==x.id)shown.push(info.group[i]);}var remaining=info.group.length-1-shown.length;
+  return '<div class="duplicate-detail" style="display:'+(duplicateOpenSet[x.id]?'block':'none')+'"><b>重複候補：'+info.group.length+'点（'+info.source+'）</b><div class="muted">商品IDを押すと対象を表示します。手動の紐付けはここから解除できます。</div>'
+    +shown.map(function(p){var manual=index.manualPairs.has(duplicatePairKey(String(x.id),String(p.id)));return '<div class="duplicate-peer"><button type="button" class="duplicate-link" data-peer="'+esc(p.id)+'" onclick="showDuplicateItem(this.dataset.peer)">'+esc(p.id)+'</button><span>'+esc(p.maker?p.maker+' ':'')+esc(p.name)+'</span><span class="pill '+esc(p.status)+'">'+esc(p.status)+'</span>'+(manual?'<button type="button" class="btn ghost sm" data-peer="'+esc(p.id)+'" onclick="removeManualDuplicate(this.closest(\'.item\').dataset.duplicateId,this.dataset.peer)">手動紐付けを解除</button>':'')+'</div>';}).join('')
+    +(remaining>0?'<div class="muted">ほか '+remaining+'点。商品IDで検索できます。</div>':'')+'</div>';}
+function toggleDuplicateDetails(btn){var row=btn.closest('.item'),id=row.dataset.duplicateId,detail=row.querySelector('.duplicate-detail');if(!detail)return;var show=detail.style.display==='none';detail.style.display=show?'block':'none';btn.setAttribute('aria-expanded',show?'true':'false');if(show)duplicateOpenSet[id]=true;else delete duplicateOpenSet[id];}
+function toggleDuplicateOnly(btn){duplicateOnly=!duplicateOnly;if(duplicateOnly){statusFilter=[];buildStatusBtns();}btn.classList.toggle('active',duplicateOnly);btn.setAttribute('aria-pressed',duplicateOnly?'true':'false');renderManage();}
+function toggleDuplicateRegister(btn){var row=btn.closest('.item'),id=row.dataset.duplicateId,panel=row.querySelector('.duplicate-register');if(!panel)return;var show=panel.style.display==='none';panel.style.display=show?'block':'none';if(show){duplicateRegisterOpenSet[id]=true;var input=panel.querySelector('input');renderDuplicateTargets(input);input.focus();}else delete duplicateRegisterOpenSet[id];}
+function renderDuplicateTargets(input){var row=input.closest('.item'),id=row.dataset.duplicateId,q=duplicateText(input.value),result=row.querySelector('.duplicate-targets');if(!q){result.innerHTML='<span class="muted">商品ID・メーカー・商品名を入力してください。</span>';return;}
+  var found=STOCK.filter(function(x){return x.status!=='売却済み'&&x.id!==id&&duplicateText(x.id+' '+x.maker+' '+x.name).indexOf(q)>=0;}).slice(0,20);
+  result.innerHTML=found.length?found.map(function(x){return '<div class="duplicate-peer"><button type="button" class="duplicate-link" data-peer="'+esc(x.id)+'" onclick="addManualDuplicate(this.closest(\'.item\').dataset.duplicateId,this.dataset.peer)">'+esc(x.id)+'｜'+esc(x.maker?x.maker+' ':'')+esc(x.name)+'（'+esc(x.status)+'）</button></div>';}).join(''):'<span class="muted">該当する未売却の商品はありません。</span>';}
+function addManualDuplicate(a,b){a=String(a);b=String(b);if(a===b||!state.items.some(function(x){return x.id===a&&x.status!=='売却済み';})||!state.items.some(function(x){return x.id===b&&x.status!=='売却済み';})){toast('未売却の商品IDを2つ選んでください');return;}
+  var key=duplicatePairKey(a,b);if((state.duplicateLinks||[]).some(function(x){return x&&duplicatePairKey(x.a,x.b)===key;})){toast('すでに手動で紐付け済みです');return;}
+  state.duplicateLinks.push({a:a,b:b});save();duplicateOpenSet[a]=true;delete duplicateRegisterOpenSet[a];renderManage();toast(a+' と '+b+' を重複候補として登録しました');}
+function removeManualDuplicate(a,b){var key=duplicatePairKey(String(a),String(b));state.duplicateLinks=state.duplicateLinks.filter(function(x){return !x||duplicatePairKey(x.a,x.b)!==key;});save();renderManage();toast('手動の紐付けを解除しました');}
+function showDuplicateItem(id){var target=STOCK.filter(function(x){return x.id===id;})[0];if(!target)return;manageCat='すべて';statusFilter=[];filterHome=false;filterChk=false;duplicateOnly=false;
+  $('mSearch').value='';$('pMin').value='';$('pMax').value='';document.querySelectorAll('#catBtns button').forEach(function(b){b.classList.toggle('active',b.textContent==='すべて');});buildStatusBtns();$('fbHome').classList.remove('active');$('fbChk').classList.remove('active');$('duplicateOnlyBtn').classList.remove('active');$('duplicateOnlyBtn').setAttribute('aria-pressed','false');renderManage();var row=$('it-'+id);if(row)row.scrollIntoView({behavior:'smooth',block:'center'});}
 function renderSummary(){var sc={},cc={};STOCK.forEach(function(x){sc[x.status]=(sc[x.status]||0)+1;if(x.status!=='売却済み')cc[x.category]=(cc[x.category]||0)+1;});
   $('stockSummary').innerHTML='<div><div class="muted">ステータス別</div>'+CFG.statuses.map(function(s){return '<span class="chip">'+esc(s)+' <b>'+(sc[s]||0)+'</b></span>';}).join('')+'</div><div><div class="muted">カテゴリ別在庫</div>'+catNames().map(function(c){return '<span class="chip">'+esc(c)+' <b>'+(cc[c]||0)+'</b></span>';}).join('')+'</div>';}
 function renderManage(){
   var el=$('manageList');if(!CFG||!el)return;renderSummary();updateUnlistedBadge();renderStandaloneAccessoryList();buildDataLists();
+  var duplicates=buildDuplicateIndex(STOCK,state.duplicateLinks),duplicateBtn=$('duplicateOnlyBtn');
+  duplicateBtn.textContent='⚠ 重複候補のみ（'+duplicates.byId.size+'点）';
   var q=$('mSearch').value.trim(),showImg=$('showImg').checked,pMin=$('pMin').value,pMax=$('pMax').value,hasR=(pMin!==''||pMax!=='');
   var list=STOCK.filter(function(x){
+    if(duplicateOnly&&!duplicates.byId.has(String(x.id)))return false;
     if(!(manageCat==='すべて'||x.category===manageCat))return false;
     if(statusFilter.length&&statusFilter.indexOf(x.status)<0)return false;
     if(filterHome&&!x.home)return false;if(filterChk&&!x.shipCheck)return false;
@@ -614,19 +656,20 @@ function renderManage(){
     if(hasR){var per=salePeriod(x);if(per==null)return false;if(pMin!==''&&per<Number(pMin))return false;if(pMax!==''&&per>Number(pMax))return false;}
     return true;});
   list=sortList(list);
-  if(!list.length){el.innerHTML='<div class="loading">該当なし</div>';return;}
+  if(!list.length){el.innerHTML='<div class="loading">'+(duplicateOnly?'この条件に該当する重複候補はありません。':'該当なし')+'</div>';return;}
   el.innerHTML=list.map(function(x){
-    var id=esc(x.id);
+    var id=esc(x.id),dup=duplicates.byId.get(String(x.id));
     var phS=(showImg&&x.photo)?'style="background-image:url('+esc(x.photo)+')"':'';
     var phI=(showImg&&x.photo)?'':(x.photo?'写真あり<span>📷変更</span>':'写真なし<span>📷追加</span>');
     var dates=[];if(x.listDate)dates.push('販売日 '+esc(x.listDate));if(x.saleDate)dates.push('売却日 '+esc(x.saleDate));
     var per=salePeriod(x),col=periodColor(per),bg=col||'#eceff1',fg=col?'#fff':'#90a4ae',pl=x.saleDate?'販売期間':(x.status==='販売中'?'販売中':'—');
     var pin=CFG.channels.map(function(c){var n=c['販路名'];return '<div class="f pf"><label>'+esc(n)+'価格</label><input type="number" inputmode="numeric" class="e-price" data-ch="'+esc(n)+'" value="'+(x.prices[n]||'')+'" oninput="recalc(\''+id+'\')"></div>';}).join('');
-    return '<div class="item" id="it-'+id+'">'
+    return '<div class="item" id="it-'+id+'" data-duplicate-id="'+id+'">'
       +'<div class="ph" '+phS+' onclick="pickPhoto(\''+id+'\')">'+phI+'</div>'
-      +'<div class="head" style="flex:1;min-width:150px"><div class="nm" style="font-size:22px;font-weight:600;line-height:1.35"><span onclick="toggleItem(\''+id+'\')" style="cursor:pointer;font-family:monospace;font-size:15px;color:var(--brand)">'+id+'</span><span style="font-size:14px;color:var(--sub);font-weight:600"> ・ </span><span class="copyable" onclick="event.stopPropagation();copyText(this)" title="タップでメーカー名・商品名をまとめてコピー"><span style="font-size:14px;color:var(--sub);font-weight:600">'+(x.maker?esc(x.maker)+' ':'')+'</span>'+esc(x.name)+'</span></div><div onclick="toggleItem(\''+id+'\')" style="cursor:pointer;margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="pill bigpill '+esc(x.status)+'">'+esc(x.status)+'</span>'+(per!=null?'<span style="background:'+bg+';color:'+fg+';padding:3px 10px;border-radius:10px;font-weight:800;white-space:nowrap">'+(x.status==='販売中'?'販売中 ':'')+periodLabel(per)+'</span>':'')+'</div></div>'
+      +'<div class="head" style="flex:1;min-width:150px"><div class="nm" style="font-size:22px;font-weight:600;line-height:1.35"><span onclick="toggleItem(\''+id+'\')" style="cursor:pointer;font-family:monospace;font-size:15px;color:var(--brand)">'+id+'</span><span style="font-size:14px;color:var(--sub);font-weight:600"> ・ </span><span class="copyable" onclick="event.stopPropagation();copyText(this)" title="タップでメーカー名・商品名をまとめてコピー"><span style="font-size:14px;color:var(--sub);font-weight:600">'+(x.maker?esc(x.maker)+' ':'')+'</span>'+esc(x.name)+'</span></div><div onclick="toggleItem(\''+id+'\')" style="cursor:pointer;margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="pill bigpill '+esc(x.status)+'">'+esc(x.status)+'</span>'+(per!=null?'<span style="background:'+bg+';color:'+fg+';padding:3px 10px;border-radius:10px;font-weight:800;white-space:nowrap">'+(x.status==='販売中'?'販売中 ':'')+periodLabel(per)+'</span>':'')+(dup?'<button type="button" class="pill duplicate-badge" onclick="event.stopPropagation();toggleDuplicateDetails(this)" aria-expanded="'+(duplicateOpenSet[x.id]?'true':'false')+'">⚠ 重複候補 '+dup.group.length+'点（'+dup.source+'）</button>':'')+'</div></div>'
       +(x.status!=='売却済み'?'<button class="btn accent sm" onclick="selShip(\''+id+'\')">🚚出荷依頼</button>':'')
       +'<button class="btn ghost sm" id="caret-'+id+'" onclick="toggleItem(\''+id+'\')">'+(openSet[x.id]?'▲':'▼')+'</button>'
+      +(dup?duplicateDetailHtml(x,dup,duplicates):'')
       +'<div class="body" id="body-'+id+'" style="display:'+(openSet[x.id]?'block':'none')+';width:100%">'
         +'<div class="hr"></div>'
         +'<div class="sub">'+esc(x.category)+(x.subCategory?' / '+esc(x.subCategory):'')+' / '+esc(x.maker)+(x.staff?' ・ 担当 '+esc(x.staff):'')+'</div>'
@@ -637,7 +680,8 @@ function renderManage(){
         +'<div class="ctrl" style="margin-top:8px"><div class="f"><label>ステータス</label><select class="e-status">'+opt(CFG.statuses,x.status)+'</select></div>'
           +'<div class="f"><label>送料パターン</label><select class="e-ship" onchange="recalc(\''+id+'\')">'+optPattern(x.shipPattern)+'</select></div>'+pin+'</div>'
         +'<div class="prof" id="prof-'+id+'" style="margin-top:8px"></div>'
-        +'<div style="margin-top:10px"><button class="btn ghost sm" onclick="toggleEdit(\''+id+'\')">✏️ 商品情報の編集</button> <button class="btn sm" onclick="saveItem(\''+id+'\')">保存</button>'+(x.status!=='売却済み'?' <button class="btn accent sm" onclick="selShip(\''+id+'\')">🚚 出荷依頼する</button>':'')+' <button class="btn danger sm" onclick="deleteStockItem(\''+id+'\')">🗑 削除</button></div>'
+        +'<div style="margin-top:10px"><button class="btn ghost sm" onclick="toggleEdit(\''+id+'\')">✏️ 商品情報の編集</button> <button class="btn sm" onclick="saveItem(\''+id+'\')">保存</button>'+(x.status!=='売却済み'?' <button class="btn accent sm" onclick="selShip(\''+id+'\')">🚚 出荷依頼する</button> <button type="button" class="btn ghost sm" onclick="toggleDuplicateRegister(this)">⚠ 重複を手動登録</button>':'')+' <button class="btn danger sm" onclick="deleteStockItem(\''+id+'\')">🗑 削除</button></div>'
+        +(x.status!=='売却済み'?'<div class="duplicate-register" style="display:'+(duplicateRegisterOpenSet[x.id]?'block':'none')+';margin-top:8px"><b>既存の商品IDと紐付ける</b><div class="muted">在庫は増えません。相手の商品ID・メーカー・商品名で検索してください。</div><input type="search" placeholder="商品ID・メーカー・商品名" oninput="renderDuplicateTargets(this)"><div class="duplicate-targets" style="margin-top:6px"></div></div>':'')
         +'<div class="editfields" id="edit-'+id+'" style="display:none;margin-top:8px">'+editFields(x)+'</div>'
       +'</div></div>';
   }).join('');
@@ -1003,7 +1047,7 @@ var state=null,_pushTimer=null,_pollStarted=false,_pushFailed=false,_retryTimer=
 function CU(){return DEMO_MODE?'':((state&&state.cloudUrl)||CLOUD_URL||'');}
 function CS(){return (state&&state.cloudSecret)||CLOUD_SECRET||'';}
 
-function defaultState(){return {rev:0,logSeq:0,orderSeq:0,accessoryMoveSeq:0,counters:{},items:[],logs:[],delist:[],accessorySkus:[],accessoryMovements:[],orders:[],cloudUrl:'',cloudSecret:'',lineDirect:false,settings:{
+function defaultState(){return {rev:0,logSeq:0,orderSeq:0,accessoryMoveSeq:0,counters:{},items:[],duplicateLinks:[],logs:[],delist:[],accessorySkus:[],accessoryMovements:[],orders:[],cloudUrl:'',cloudSecret:'',lineDirect:false,settings:{
   categories:[{name:'エフェクター',prefix:'E'},{name:'ギター',prefix:'G'},{name:'ベース',prefix:'B'}],
   subcategories:[{parent:'エフェクター',name:'歪み系'},{parent:'エフェクター',name:'空間系'},{parent:'エフェクター',name:'その他'},{parent:'ギター',name:'エレキギター'},{parent:'ベース',name:'エレキベース'}],
   categoryFields:[{category:'エフェクター',label:'箱の有無',options:'箱あり,箱無し'},{category:'エフェクター',label:'アダプター',options:'有,無'},{category:'ギター',label:'ケースの有無',options:'純正ケース有,ケース有,本体のみ'},{category:'ベース',label:'ケースの有無',options:'純正ケース有,ケース有,本体のみ'}],
@@ -1020,7 +1064,7 @@ function defaultState(){return {rev:0,logSeq:0,orderSeq:0,accessoryMoveSeq:0,cou
   accessoryTypes:['スタンド','ギグバッグ','ストラップ','チューナー','その他'],
   periodColors:[{min:0,max:30,color:'赤'},{min:31,max:60,color:'橙'},{min:61,max:90,color:'黄'},{min:91,max:3650,color:'グレー'}]
 }};}
-function normalize(o){var d=defaultState();o=o||{};o.settings=Object.assign({},d.settings,o.settings||{});['items','logs','delist','accessorySkus','accessoryMovements','orders'].forEach(function(k){if(!Array.isArray(o[k]))o[k]=d[k];});o.counters=o.counters||{};o.logSeq=o.logSeq||0;o.orderSeq=Math.max(Number(o.orderSeq)||0,o.orders.reduce(function(n,x){var m=/-([0-9]+)$/.exec(x.id||'');return m?Math.max(n,Number(m[1])):n;},0));o.accessoryMoveSeq=Math.max(Number(o.accessoryMoveSeq)||0,o.accessoryMovements.reduce(function(n,x){return Math.max(n,Number(x.id)||0);},0));o.rev=o.rev||0;o.cloudUrl=o.cloudUrl||'';o.cloudSecret=o.cloudSecret||'';o.lineDirect=!!o.lineDirect;Object.keys(d.settings).forEach(function(k){if(!Array.isArray(o.settings[k]))o.settings[k]=d.settings[k];});o.accessorySkus.forEach(function(s){if(s.maker){var prefix=String(s.maker).trim();if(prefix&&String(s.name||'').indexOf(prefix)!==0)s.name=(prefix+' '+String(s.name||'')).trim();delete s.maker;}});return o;}
+function normalize(o){var d=defaultState();o=o||{};o.settings=Object.assign({},d.settings,o.settings||{});['items','duplicateLinks','logs','delist','accessorySkus','accessoryMovements','orders'].forEach(function(k){if(!Array.isArray(o[k]))o[k]=d[k];});o.counters=o.counters||{};o.logSeq=o.logSeq||0;o.orderSeq=Math.max(Number(o.orderSeq)||0,o.orders.reduce(function(n,x){var m=/-([0-9]+)$/.exec(x.id||'');return m?Math.max(n,Number(m[1])):n;},0));o.accessoryMoveSeq=Math.max(Number(o.accessoryMoveSeq)||0,o.accessoryMovements.reduce(function(n,x){return Math.max(n,Number(x.id)||0);},0));o.rev=o.rev||0;o.cloudUrl=o.cloudUrl||'';o.cloudSecret=o.cloudSecret||'';o.lineDirect=!!o.lineDirect;Object.keys(d.settings).forEach(function(k){if(!Array.isArray(o.settings[k]))o.settings[k]=d.settings[k];});o.accessorySkus.forEach(function(s){if(s.maker){var prefix=String(s.maker).trim();if(prefix&&String(s.name||'').indexOf(prefix)!==0)s.name=(prefix+' '+String(s.name||'')).trim();delete s.maker;}});return o;}
 function validStatePayload(o){return !!o&&typeof o==='object'&&!Array.isArray(o)&&Array.isArray(o.items);}
 function loadState(){var raw=localStorage.getItem(KEY);if(raw==null||raw==='')return DEMO_MODE?demoState():defaultState();var s;try{s=JSON.parse(raw);}catch(e){throw new Error('保存データのJSON解析に失敗');}if(!validStatePayload(s))throw new Error('保存データの形式が不正');return normalize(s);}
 function downloadRawState(){var raw=localStorage.getItem(KEY);if(raw==null){alert('この端末に保存データがありません');return;}var blob=new Blob([raw],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='中古販売_読込エラー原文_'+todayStr().replace(/\//g,'')+'.txt';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);}
@@ -1714,7 +1758,8 @@ function renderAccessoryAnalysis(items){var mains=items.filter(function(x){retur
   $('accessoryAnalysis').innerHTML+='<div class="card"><h2>🪛 付属品の単品販売</h2><p class="muted">上の期間・絞り込みに一致する単品注文を集計。販路手数料と送料を付属品の利益から引き、販売時の金額で確定します。売上・利益は上の総額にも含まれます。</p><div class="kpis small"><div class="kpi sm"><div class="n">'+solo.length+'件 / '+yen(soloTotal.qty)+'点</div><div class="l">単品注文</div></div><div class="kpi sm blue"><div class="n">'+yen(soloTotal.revenue)+'円</div><div class="l">売上</div></div><div class="kpi sm green"><div class="n">'+yen(soloTotal.profit)+'円</div><div class="l">利益</div></div></div><div class="acc-table-wrap" style="margin-top:12px"><table><tr><th>注文ID・商品</th><th>数量</th><th>売上</th><th>原価</th><th>販路手数料</th><th>送料</th><th>利益</th></tr>'+solo.map(function(x){return '<tr><td>'+esc(x.id+'｜'+x.name)+'</td><td>'+yen(x.qty)+'点</td><td>'+yen(x.salePrice)+'円</td><td>'+yen(x.cost)+'円</td><td>'+yen(x.fee)+'円</td><td>'+yen(x.shipping)+'円</td><td>'+profitHtml(x.profit)+'</td></tr>';}).join('')+(solo.length?'':'<tr><td colspan="7" class="muted">この条件での単品販売はありません。</td></tr>')+'</table></div></div>';}
 function demoItem(id,category,maker,name,cost,price,status,listDate,saleDate,channel,profit,shipPattern){return {id:id,category:category,subCategory:category==='ベース'?'エレキベース':(category==='ギター'?'エレキギター':'歪み系'),maker:maker,name:name,condition:'目立った傷や汚れなし',opCondition:'完動品',accessory:'',staff:'担当A',cost:cost,buyDate:'2026/08/10',photo:'',status:status,listDate:listDate,shipPattern:shipPattern||'',prices:{'メルカリ':price},home:false,shipCheck:false,channel:channel||'',salePrice:status==='売却済み'?price:'',profit:status==='売却済み'?profit:'',shipDate:saleDate||'',saleDate:saleDate||'',note:'',listings:{}};}
 function demoState(){var d=defaultState();d.settings.shipPatterns.push({name:'大型宅急便',amount:1700,method:'宅急便'});d.settings.channelShipDefault=[{channel:'メルカリ',shipPattern:'大型宅急便'},{channel:'ヤフフリマ',shipPattern:'大型宅急便'}];
-  d.items=[demoItem('G0001','ギター','Fender','Player Stratocaster',52000,79800,'売却済み','2026/08/15','2026/09/29','メルカリ',18120,'大型宅急便'),demoItem('B0001','ベース','Ibanez','SR500E',46000,69800,'売却済み','2026/08/20','2026/09/28','ヤフフリマ',19210,'大型宅急便'),demoItem('G0002','ギター','YAMAHA','REVSTAR RSE20',38000,59800,'販売中','2026/09/05','','','', '大型宅急便'),demoItem('B0002','ベース','Fender','Player Precision Bass',49500,73900,'販売中','2026/09/12','','','', '大型宅急便'),demoItem('E0001','エフェクター','BOSS','DS-1 Distortion',4000,8980,'販売中','2026/09/15','','','', '宅急便60')];
+  d.items=[demoItem('G0001','ギター','Fender','Player Stratocaster',52000,79800,'売却済み','2026/08/15','2026/09/29','メルカリ',18120,'大型宅急便'),demoItem('B0001','ベース','Ibanez','SR500E',46000,69800,'売却済み','2026/08/20','2026/09/28','ヤフフリマ',19210,'大型宅急便'),demoItem('G0002','ギター','YAMAHA','REVSTAR RSE20',38000,59800,'販売中','2026/09/05','','','', '大型宅急便'),demoItem('B0002','ベース','Fender','Player Precision Bass',49500,73900,'販売中','2026/09/12','','','', '大型宅急便'),demoItem('E0001','エフェクター','BOSS','DS-1 Distortion',4000,8980,'販売中','2026/09/15','','','', '宅急便60'),demoItem('G0003','ギター','Fender','Player Stratocaster',54000,82800,'販売中','2026/10/01','','','', '大型宅急便'),demoItem('G0004','ギター','ｆｅｎｄｅｒ','ＰＬＡＹＥＲ　ＳＴＲＡＴＯＣＡＳＴＥＲ',55000,83800,'未販売','','','','', '大型宅急便'),demoItem('G0005','ギター','Fender','Player Stratocaster 2024',56000,84800,'販売中','2026/10/04','','','', '大型宅急便')];
+  d.duplicateLinks=[{a:'G0003',b:'G0005'}];
   d.accessorySkus=[{sku:'AC0001',type:'スタンド',name:'HERCULES GS414B PLUS',qty:8,avgCost:1450,price:2980,bundlePrice:2980,standalonePrice:3480,standaloneShipPattern:'宅急便80',reorderPoint:3},{sku:'AC0002',type:'ギグバッグ',name:'Fender FE620',qty:5,avgCost:3200,price:5980,bundlePrice:5980,standalonePrice:6980,standaloneShipPattern:'宅急便100',reorderPoint:2},{sku:'AC0003-BK',type:'ストラップ',name:'ERNIE BALL Polypro Strap 黒',qty:7,avgCost:780,price:1980,bundlePrice:1980,standalonePrice:2480,standaloneShipPattern:'宅急便60',reorderPoint:3},{sku:'AC0003-RD',type:'ストラップ',name:'ERNIE BALL Polypro Strap 赤',qty:5,avgCost:820,price:1980,bundlePrice:1980,standalonePrice:2480,standaloneShipPattern:'宅急便60',reorderPoint:2},{sku:'AC0004',type:'チューナー',name:'KORG GA-2',qty:9,avgCost:1100,price:2480,bundlePrice:2480,standalonePrice:2980,standaloneShipPattern:'ネコポス',reorderPoint:3}];
   d.orders=[{id:'O20260929-0001',mainItemId:'G0001',date:'2026/09/29',channel:'メルカリ',mainPrice:79800,mainCost:52000,mainFee:7980,mainProfit:18120,shipping:1700,accessories:[{sku:'AC0002',type:'ギグバッグ',name:'Fender FE620',qty:1,unitPrice:5980,unitCost:3200,revenue:5980,cost:3200,fee:598,profit:2182},{sku:'AC0004',type:'チューナー',name:'KORG GA-2',qty:1,unitPrice:2480,unitCost:1100,revenue:2480,cost:1100,fee:248,profit:1132}],totalRevenue:88260,totalCost:56300,fee:8826,profit:21434,status:'有効'},{id:'O20260928-0002',mainItemId:'B0001',date:'2026/09/28',channel:'ヤフフリマ',mainPrice:69800,mainCost:46000,mainFee:3490,mainProfit:18610,shipping:1700,accessories:[{sku:'AC0003-BK',type:'ストラップ',name:'ERNIE BALL Polypro Strap 黒',qty:1,unitPrice:1980,unitCost:780,revenue:1980,cost:780,fee:99,profit:1101}],totalRevenue:71780,totalCost:46780,fee:3589,profit:19711,status:'有効'}];
   d.items[1].profit=18610;d.orderSeq=2;
