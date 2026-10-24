@@ -147,7 +147,7 @@
         <label class="switch" style="margin:0"><input type="checkbox" id="statusMulti" onchange="toggleStatusMulti(this)"> 複数選択（OR検索）</label>
       </div>
       <div class="catbtns" id="statusBtns"></div>
-      <div class="catbtns"><button id="fbHome" onclick="toggleFlag('home',this)">🏠 自宅保管のみ</button><button id="fbChk" onclick="toggleFlag('chk',this)">📮 送料確認のみ</button><button id="duplicateOnlyBtn" onclick="toggleDuplicateOnly(this)" aria-pressed="false">⚠ 重複候補のみ</button></div>
+      <div class="catbtns"><button id="fbHome" onclick="toggleFlag('home',this)">🏠 自宅保管のみ</button><button id="fbChk" onclick="toggleFlag('chk',this)">📮 送料確認のみ</button><button id="duplicateOnlyBtn" onclick="toggleDuplicateOnly(this)" aria-pressed="false">⚠ 重複ありのみ</button></div>
       <label class="switch" style="margin-top:10px"><input type="checkbox" id="showImg" onchange="renderManage()"> 🖼 画像を表示する</label>
       <div class="hr"></div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
@@ -243,7 +243,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-25a</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-25b</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -630,7 +630,7 @@ function buildDuplicateIndex(items,links,exclusions){
 }
 function duplicateDetailHtml(x,info,index){var shown=[];for(var i=0;i<info.group.length&&shown.length<50;i++){if(info.group[i].id!==x.id)shown.push(info.group[i]);}var remaining=info.group.length-1-shown.length;
   var key=duplicateKey(x),autoActive=!!key&&!index.excluded.has(duplicateAutoExclusionKey(x.id,key))&&info.group.some(function(p){return p.id!==x.id&&duplicateKey(p)===key&&!index.excluded.has(duplicateAutoExclusionKey(p.id,key));});
-  return '<div class="duplicate-detail" style="display:'+(duplicateOpenSet[x.id]?'block':'none')+'"><b>重複候補：'+info.group.length+'点（'+info.source+'）</b><div class="muted">商品IDを押すと対象を表示します。手動の紐付けはここから解除できます。</div>'
+  return '<div class="duplicate-detail" style="display:'+(duplicateOpenSet[x.id]?'block':'none')+'"><b>重複あり：'+info.group.length+'点（'+info.source+'）</b><div class="muted">商品IDを押すと対象を表示します。手動の紐付けはここから解除できます。</div>'
     +shown.map(function(p){var manual=index.manualPairs.has(duplicatePairKey(String(x.id),String(p.id)));return '<div class="duplicate-peer"><button type="button" class="duplicate-link" data-peer="'+esc(p.id)+'" onclick="showDuplicateItem(this.dataset.peer)">'+esc(p.id)+'</button><span>'+esc(p.maker?p.maker+' ':'')+esc(p.name)+'</span><span class="pill '+esc(p.status)+'">'+esc(p.status)+'</span>'+(manual?'<button type="button" class="btn ghost sm" data-peer="'+esc(p.id)+'" onclick="removeManualDuplicate(this.closest(\'.item\').dataset.duplicateId,this.dataset.peer)">手動紐付けを解除</button>':'')+'</div>';}).join('')
     +(remaining>0?'<div class="muted">ほか '+remaining+'点。商品IDで検索できます。</div>':'')
     +(autoActive?'<div style="margin-top:8px"><button type="button" class="btn ghost sm" onclick="excludeAutoDuplicate(this.closest(\'.item\').dataset.duplicateId)">この商品を自動判定から除外</button><div class="muted">同じ名前の候補グループから、この商品だけを外します。手動の紐付けは残ります。</div></div>':'')+'</div>';}
@@ -644,7 +644,7 @@ function renderDuplicateTargets(input){var row=input.closest('.item'),id=row.dat
   result.innerHTML=found.length?found.map(function(x){return '<div class="duplicate-peer"><button type="button" class="duplicate-link" data-peer="'+esc(x.id)+'" onclick="addManualDuplicate(this.closest(\'.item\').dataset.duplicateId,this.dataset.peer)">'+esc(x.id)+'｜'+esc(x.maker?x.maker+' ':'')+esc(x.name)+'（'+esc(x.status)+'）</button></div>';}).join(''):'<span class="muted">該当する未売却の商品はありません。</span>';}
 function addManualDuplicate(a,b){a=String(a);b=String(b);if(a===b||!state.items.some(function(x){return x.id===a&&x.status!=='売却済み';})||!state.items.some(function(x){return x.id===b&&x.status!=='売却済み';})){toast('未売却の商品IDを2つ選んでください');return;}
   var key=duplicatePairKey(a,b);if((state.duplicateLinks||[]).some(function(x){return x&&duplicatePairKey(x.a,x.b)===key;})){toast('すでに手動で紐付け済みです');return;}
-  state.duplicateLinks.push({a:a,b:b});save();duplicateOpenSet[a]=true;delete duplicateRegisterOpenSet[a];renderManage();toast(a+' と '+b+' を重複候補として登録しました');}
+  state.duplicateLinks.push({a:a,b:b});save();duplicateOpenSet[a]=true;delete duplicateRegisterOpenSet[a];renderManage();toast(a+' と '+b+' を重複ありとして登録しました');}
 function removeManualDuplicate(a,b){var key=duplicatePairKey(String(a),String(b));state.duplicateLinks=state.duplicateLinks.filter(function(x){return !x||duplicatePairKey(x.a,x.b)!==key;});save();renderManage();toast('手動の紐付けを解除しました');}
 function showDuplicateItem(id){var target=STOCK.filter(function(x){return x.id===id;})[0];if(!target)return;manageCat='すべて';statusFilter=[];filterHome=false;filterChk=false;duplicateOnly=false;
   $('mSearch').value='';$('pMin').value='';$('pMax').value='';document.querySelectorAll('#catBtns button').forEach(function(b){b.classList.toggle('active',b.textContent==='すべて');});buildStatusBtns();$('fbHome').classList.remove('active');$('fbChk').classList.remove('active');$('duplicateOnlyBtn').classList.remove('active');$('duplicateOnlyBtn').setAttribute('aria-pressed','false');renderManage();var row=$('it-'+id);if(row)row.scrollIntoView({behavior:'smooth',block:'center'});}
@@ -653,7 +653,7 @@ function renderSummary(){var sc={},cc={};STOCK.forEach(function(x){sc[x.status]=
 function renderManage(){
   var el=$('manageList');if(!CFG||!el)return;renderSummary();updateUnlistedBadge();renderStandaloneAccessoryList();buildDataLists();
   var duplicates=buildDuplicateIndex(STOCK,state.duplicateLinks,state.duplicateAutoExclusions),duplicateBtn=$('duplicateOnlyBtn');
-  duplicateBtn.textContent='⚠ 重複候補のみ（'+duplicates.byId.size+'点）';
+  duplicateBtn.textContent='⚠ 重複ありのみ（'+duplicates.byId.size+'点）';
   var q=$('mSearch').value.trim(),showImg=$('showImg').checked,pMin=$('pMin').value,pMax=$('pMax').value,hasR=(pMin!==''||pMax!=='');
   var list=STOCK.filter(function(x){
     if(duplicateOnly&&!duplicates.byId.has(String(x.id)))return false;
@@ -664,7 +664,7 @@ function renderManage(){
     if(hasR){var per=salePeriod(x);if(per==null)return false;if(pMin!==''&&per<Number(pMin))return false;if(pMax!==''&&per>Number(pMax))return false;}
     return true;});
   list=sortList(list);
-  if(!list.length){el.innerHTML='<div class="loading">'+(duplicateOnly?'この条件に該当する重複候補はありません。':'該当なし')+'</div>';return;}
+  if(!list.length){el.innerHTML='<div class="loading">'+(duplicateOnly?'この条件に該当する重複はありません。':'該当なし')+'</div>';return;}
   el.innerHTML=list.map(function(x){
     var id=esc(x.id),dup=duplicates.byId.get(String(x.id)),key=duplicateKey(x),autoExcluded=!!key&&duplicates.excluded.has(duplicateAutoExclusionKey(x.id,key));
     var phS=(showImg&&x.photo)?'style="background-image:url('+esc(x.photo)+')"':'';
@@ -674,7 +674,7 @@ function renderManage(){
     var pin=CFG.channels.map(function(c){var n=c['販路名'];return '<div class="f pf"><label>'+esc(n)+'価格</label><input type="number" inputmode="numeric" class="e-price" data-ch="'+esc(n)+'" value="'+(x.prices[n]||'')+'" oninput="recalc(\''+id+'\')"></div>';}).join('');
     return '<div class="item" id="it-'+id+'" data-duplicate-id="'+id+'">'
       +'<div class="ph" '+phS+' onclick="pickPhoto(\''+id+'\')">'+phI+'</div>'
-      +'<div class="head" style="flex:1;min-width:150px"><div class="nm" style="font-size:22px;font-weight:600;line-height:1.35"><span onclick="toggleItem(\''+id+'\')" style="cursor:pointer;font-family:monospace;font-size:15px;color:var(--brand)">'+id+'</span><span style="font-size:14px;color:var(--sub);font-weight:600"> ・ </span><span class="copyable" onclick="event.stopPropagation();copyText(this)" title="タップでメーカー名・商品名をまとめてコピー"><span style="font-size:14px;color:var(--sub);font-weight:600">'+(x.maker?esc(x.maker)+' ':'')+'</span>'+esc(x.name)+'</span></div><div onclick="toggleItem(\''+id+'\')" style="cursor:pointer;margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="pill bigpill '+esc(x.status)+'">'+esc(x.status)+'</span>'+(per!=null?'<span style="background:'+bg+';color:'+fg+';padding:3px 10px;border-radius:10px;font-weight:800;white-space:nowrap">'+(x.status==='販売中'?'販売中 ':'')+periodLabel(per)+'</span>':'')+(dup?'<button type="button" class="pill duplicate-badge" onclick="event.stopPropagation();toggleDuplicateDetails(this)" aria-expanded="'+(duplicateOpenSet[x.id]?'true':'false')+'">⚠ 重複候補 '+dup.group.length+'点（'+dup.source+'）</button>':'')+(autoExcluded?'<button type="button" class="pill duplicate-excluded-badge" onclick="event.stopPropagation();restoreAutoDuplicate(this.closest(\'.item\').dataset.duplicateId)">自動判定から除外中・戻す</button>':'')+'</div></div>'
+      +'<div class="head" style="flex:1;min-width:150px"><div class="nm" style="font-size:22px;font-weight:600;line-height:1.35"><span onclick="toggleItem(\''+id+'\')" style="cursor:pointer;font-family:monospace;font-size:15px;color:var(--brand)">'+id+'</span><span style="font-size:14px;color:var(--sub);font-weight:600"> ・ </span><span class="copyable" onclick="event.stopPropagation();copyText(this)" title="タップでメーカー名・商品名をまとめてコピー"><span style="font-size:14px;color:var(--sub);font-weight:600">'+(x.maker?esc(x.maker)+' ':'')+'</span>'+esc(x.name)+'</span></div><div onclick="toggleItem(\''+id+'\')" style="cursor:pointer;margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="pill bigpill '+esc(x.status)+'">'+esc(x.status)+'</span>'+(per!=null?'<span style="background:'+bg+';color:'+fg+';padding:3px 10px;border-radius:10px;font-weight:800;white-space:nowrap">'+(x.status==='販売中'?'販売中 ':'')+periodLabel(per)+'</span>':'')+(dup?'<button type="button" class="pill duplicate-badge" onclick="event.stopPropagation();toggleDuplicateDetails(this)" aria-expanded="'+(duplicateOpenSet[x.id]?'true':'false')+'">⚠ 重複あり '+dup.group.length+'点（'+dup.source+'）</button>':'')+(autoExcluded?'<button type="button" class="pill duplicate-excluded-badge" onclick="event.stopPropagation();restoreAutoDuplicate(this.closest(\'.item\').dataset.duplicateId)">自動判定から除外中・戻す</button>':'')+'</div></div>'
       +(x.status!=='売却済み'?'<button class="btn accent sm" onclick="selShip(\''+id+'\')">🚚出荷依頼</button>':'')
       +'<button class="btn ghost sm" id="caret-'+id+'" onclick="toggleItem(\''+id+'\')">'+(openSet[x.id]?'▲':'▼')+'</button>'
       +(dup?duplicateDetailHtml(x,dup,duplicates):'')
