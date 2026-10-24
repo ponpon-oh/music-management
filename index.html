@@ -40,6 +40,7 @@
   .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;background:#eceff1;color:#607d8b}
   #unlistedBadge{border:0;cursor:pointer;padding:6px 10px;font-size:13px}
   .duplicate-badge{border:1px solid #ef9a9a;background:#ffebee;color:#b71c1c;cursor:pointer;padding:5px 9px;font-size:12px}
+  .duplicate-excluded-badge{border:1px solid #cfd8dc;background:#eceff1;color:#455a64;cursor:pointer;padding:5px 9px;font-size:12px}
   .duplicate-detail,.duplicate-register{width:100%;background:#fff8f7;border:1px solid #ffcdd2;border-radius:8px;padding:10px;font-size:13px}
   .duplicate-peer{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:5px 0;border-top:1px solid #f1d8d8}
   .duplicate-peer:first-of-type{border-top:0}
@@ -242,7 +243,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-23b</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-25a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -610,24 +611,31 @@ function optPattern(sel){return '<option value=""></option>'+CFG.shipPatterns.ma
 function duplicateText(s){return String(s==null?'':s).normalize('NFKC').toLocaleLowerCase('en').replace(/\s+/g,' ').trim();}
 function duplicateKey(x){var name=duplicateText(x.name);return name?JSON.stringify([duplicateText(x.category),duplicateText(x.maker),name]):'';}
 function duplicatePairKey(a,b){return JSON.stringify([a,b].sort());}
-function buildDuplicateIndex(items,links){
+function duplicateAutoExclusionKey(id,key){return JSON.stringify([String(id),key]);}
+function duplicateAutoExcluded(x,exclusions){var key=duplicateKey(x);return !!key&&(exclusions||[]).some(function(e){return e&&e.id===String(x.id)&&e.key===key;});}
+function buildDuplicateIndex(items,links,exclusions){
   var active=(items||[]).filter(function(x){return x&&x.status!=='売却済み'&&x.id!=null;});
-  var byActiveId=new Map(),parent=new Map(),sizes=new Map(),byKey=new Map(),keyCounts=new Map(),manualPairs=new Set(),manualEdges=[];
+  var byActiveId=new Map(),parent=new Map(),sizes=new Map(),byKey=new Map(),keyCounts=new Map(),manualPairs=new Set(),manualEdges=[],excluded=new Set();
+  (exclusions||[]).forEach(function(e){if(e&&typeof e.id==='string'&&typeof e.key==='string')excluded.add(duplicateAutoExclusionKey(e.id,e.key));});
   active.forEach(function(x){var id=String(x.id);byActiveId.set(id,x);parent.set(id,id);sizes.set(id,1);});
   function root(id){var p=parent.get(id);if(p!==id){p=root(p);parent.set(id,p);}return p;}
   function union(a,b){a=root(a);b=root(b);if(a===b)return;if(sizes.get(a)<sizes.get(b)){var t=a;a=b;b=t;}parent.set(b,a);sizes.set(a,sizes.get(a)+sizes.get(b));}
-  active.forEach(function(x){var key=duplicateKey(x);if(!key)return;keyCounts.set(key,(keyCounts.get(key)||0)+1);if(byKey.has(key))union(String(x.id),byKey.get(key));else byKey.set(key,String(x.id));});
+  active.forEach(function(x){var key=duplicateKey(x);if(!key||excluded.has(duplicateAutoExclusionKey(x.id,key)))return;keyCounts.set(key,(keyCounts.get(key)||0)+1);if(byKey.has(key))union(String(x.id),byKey.get(key));else byKey.set(key,String(x.id));});
   (links||[]).forEach(function(link){if(!link||typeof link.a!=='string'||typeof link.b!=='string'||link.a===link.b||!byActiveId.has(link.a)||!byActiveId.has(link.b))return;manualPairs.add(duplicatePairKey(link.a,link.b));manualEdges.push(link.a);union(link.a,link.b);});
   var groups=new Map(),byId=new Map(),groupCount=0,manualRoots=new Set();
   manualEdges.forEach(function(id){manualRoots.add(root(id));});
   active.forEach(function(x){var r=root(String(x.id));if(!groups.has(r))groups.set(r,[]);groups.get(r).push(x);});
   groups.forEach(function(group,r){if(group.length<2)return;groupCount++;group.sort(function(a,b){return String(a.id).localeCompare(String(b.id),'ja',{numeric:true});});var hasAuto=group.some(function(x){return (keyCounts.get(duplicateKey(x))||0)>1;});var hasManual=manualRoots.has(r);group.forEach(function(x){byId.set(String(x.id),{group:group,source:hasAuto&&hasManual?'自動＋手動':(hasManual?'手動':'自動')});});});
-  return {byId:byId,activeById:byActiveId,manualPairs:manualPairs,groupCount:groupCount};
+  return {byId:byId,activeById:byActiveId,manualPairs:manualPairs,excluded:excluded,groupCount:groupCount};
 }
 function duplicateDetailHtml(x,info,index){var shown=[];for(var i=0;i<info.group.length&&shown.length<50;i++){if(info.group[i].id!==x.id)shown.push(info.group[i]);}var remaining=info.group.length-1-shown.length;
+  var key=duplicateKey(x),autoActive=!!key&&!index.excluded.has(duplicateAutoExclusionKey(x.id,key))&&info.group.some(function(p){return p.id!==x.id&&duplicateKey(p)===key&&!index.excluded.has(duplicateAutoExclusionKey(p.id,key));});
   return '<div class="duplicate-detail" style="display:'+(duplicateOpenSet[x.id]?'block':'none')+'"><b>重複候補：'+info.group.length+'点（'+info.source+'）</b><div class="muted">商品IDを押すと対象を表示します。手動の紐付けはここから解除できます。</div>'
     +shown.map(function(p){var manual=index.manualPairs.has(duplicatePairKey(String(x.id),String(p.id)));return '<div class="duplicate-peer"><button type="button" class="duplicate-link" data-peer="'+esc(p.id)+'" onclick="showDuplicateItem(this.dataset.peer)">'+esc(p.id)+'</button><span>'+esc(p.maker?p.maker+' ':'')+esc(p.name)+'</span><span class="pill '+esc(p.status)+'">'+esc(p.status)+'</span>'+(manual?'<button type="button" class="btn ghost sm" data-peer="'+esc(p.id)+'" onclick="removeManualDuplicate(this.closest(\'.item\').dataset.duplicateId,this.dataset.peer)">手動紐付けを解除</button>':'')+'</div>';}).join('')
-    +(remaining>0?'<div class="muted">ほか '+remaining+'点。商品IDで検索できます。</div>':'')+'</div>';}
+    +(remaining>0?'<div class="muted">ほか '+remaining+'点。商品IDで検索できます。</div>':'')
+    +(autoActive?'<div style="margin-top:8px"><button type="button" class="btn ghost sm" onclick="excludeAutoDuplicate(this.closest(\'.item\').dataset.duplicateId)">この商品を自動判定から除外</button><div class="muted">同じ名前の候補グループから、この商品だけを外します。手動の紐付けは残ります。</div></div>':'')+'</div>';}
+function excludeAutoDuplicate(id){var x=STOCK.filter(function(it){return it.id===id&&it.status!=='売却済み';})[0],key=x&&duplicateKey(x);if(!key)return;if(duplicateAutoExcluded(x,state.duplicateAutoExclusions))return;state.duplicateAutoExclusions.push({id:String(id),key:key});save();renderManage();toast(id+' を自動判定から除外しました');}
+function restoreAutoDuplicate(id){var x=STOCK.filter(function(it){return it.id===id;})[0],key=x&&duplicateKey(x);if(!key)return;state.duplicateAutoExclusions=state.duplicateAutoExclusions.filter(function(e){return !(e&&e.id===String(id)&&e.key===key);});save();renderManage();toast(id+' の自動判定を戻しました');}
 function toggleDuplicateDetails(btn){var row=btn.closest('.item'),id=row.dataset.duplicateId,detail=row.querySelector('.duplicate-detail');if(!detail)return;var show=detail.style.display==='none';detail.style.display=show?'block':'none';btn.setAttribute('aria-expanded',show?'true':'false');if(show)duplicateOpenSet[id]=true;else delete duplicateOpenSet[id];}
 function toggleDuplicateOnly(btn){duplicateOnly=!duplicateOnly;if(duplicateOnly){statusFilter=[];buildStatusBtns();}btn.classList.toggle('active',duplicateOnly);btn.setAttribute('aria-pressed',duplicateOnly?'true':'false');renderManage();}
 function toggleDuplicateRegister(btn){var row=btn.closest('.item'),id=row.dataset.duplicateId,panel=row.querySelector('.duplicate-register');if(!panel)return;var show=panel.style.display==='none';panel.style.display=show?'block':'none';if(show){duplicateRegisterOpenSet[id]=true;var input=panel.querySelector('input');renderDuplicateTargets(input);input.focus();}else delete duplicateRegisterOpenSet[id];}
@@ -644,7 +652,7 @@ function renderSummary(){var sc={},cc={};STOCK.forEach(function(x){sc[x.status]=
   $('stockSummary').innerHTML='<div><div class="muted">ステータス別</div>'+CFG.statuses.map(function(s){return '<span class="chip">'+esc(s)+' <b>'+(sc[s]||0)+'</b></span>';}).join('')+'</div><div><div class="muted">カテゴリ別在庫</div>'+catNames().map(function(c){return '<span class="chip">'+esc(c)+' <b>'+(cc[c]||0)+'</b></span>';}).join('')+'</div>';}
 function renderManage(){
   var el=$('manageList');if(!CFG||!el)return;renderSummary();updateUnlistedBadge();renderStandaloneAccessoryList();buildDataLists();
-  var duplicates=buildDuplicateIndex(STOCK,state.duplicateLinks),duplicateBtn=$('duplicateOnlyBtn');
+  var duplicates=buildDuplicateIndex(STOCK,state.duplicateLinks,state.duplicateAutoExclusions),duplicateBtn=$('duplicateOnlyBtn');
   duplicateBtn.textContent='⚠ 重複候補のみ（'+duplicates.byId.size+'点）';
   var q=$('mSearch').value.trim(),showImg=$('showImg').checked,pMin=$('pMin').value,pMax=$('pMax').value,hasR=(pMin!==''||pMax!=='');
   var list=STOCK.filter(function(x){
@@ -658,7 +666,7 @@ function renderManage(){
   list=sortList(list);
   if(!list.length){el.innerHTML='<div class="loading">'+(duplicateOnly?'この条件に該当する重複候補はありません。':'該当なし')+'</div>';return;}
   el.innerHTML=list.map(function(x){
-    var id=esc(x.id),dup=duplicates.byId.get(String(x.id));
+    var id=esc(x.id),dup=duplicates.byId.get(String(x.id)),key=duplicateKey(x),autoExcluded=!!key&&duplicates.excluded.has(duplicateAutoExclusionKey(x.id,key));
     var phS=(showImg&&x.photo)?'style="background-image:url('+esc(x.photo)+')"':'';
     var phI=(showImg&&x.photo)?'':(x.photo?'写真あり<span>📷変更</span>':'写真なし<span>📷追加</span>');
     var dates=[];if(x.listDate)dates.push('販売日 '+esc(x.listDate));if(x.saleDate)dates.push('売却日 '+esc(x.saleDate));
@@ -666,7 +674,7 @@ function renderManage(){
     var pin=CFG.channels.map(function(c){var n=c['販路名'];return '<div class="f pf"><label>'+esc(n)+'価格</label><input type="number" inputmode="numeric" class="e-price" data-ch="'+esc(n)+'" value="'+(x.prices[n]||'')+'" oninput="recalc(\''+id+'\')"></div>';}).join('');
     return '<div class="item" id="it-'+id+'" data-duplicate-id="'+id+'">'
       +'<div class="ph" '+phS+' onclick="pickPhoto(\''+id+'\')">'+phI+'</div>'
-      +'<div class="head" style="flex:1;min-width:150px"><div class="nm" style="font-size:22px;font-weight:600;line-height:1.35"><span onclick="toggleItem(\''+id+'\')" style="cursor:pointer;font-family:monospace;font-size:15px;color:var(--brand)">'+id+'</span><span style="font-size:14px;color:var(--sub);font-weight:600"> ・ </span><span class="copyable" onclick="event.stopPropagation();copyText(this)" title="タップでメーカー名・商品名をまとめてコピー"><span style="font-size:14px;color:var(--sub);font-weight:600">'+(x.maker?esc(x.maker)+' ':'')+'</span>'+esc(x.name)+'</span></div><div onclick="toggleItem(\''+id+'\')" style="cursor:pointer;margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="pill bigpill '+esc(x.status)+'">'+esc(x.status)+'</span>'+(per!=null?'<span style="background:'+bg+';color:'+fg+';padding:3px 10px;border-radius:10px;font-weight:800;white-space:nowrap">'+(x.status==='販売中'?'販売中 ':'')+periodLabel(per)+'</span>':'')+(dup?'<button type="button" class="pill duplicate-badge" onclick="event.stopPropagation();toggleDuplicateDetails(this)" aria-expanded="'+(duplicateOpenSet[x.id]?'true':'false')+'">⚠ 重複候補 '+dup.group.length+'点（'+dup.source+'）</button>':'')+'</div></div>'
+      +'<div class="head" style="flex:1;min-width:150px"><div class="nm" style="font-size:22px;font-weight:600;line-height:1.35"><span onclick="toggleItem(\''+id+'\')" style="cursor:pointer;font-family:monospace;font-size:15px;color:var(--brand)">'+id+'</span><span style="font-size:14px;color:var(--sub);font-weight:600"> ・ </span><span class="copyable" onclick="event.stopPropagation();copyText(this)" title="タップでメーカー名・商品名をまとめてコピー"><span style="font-size:14px;color:var(--sub);font-weight:600">'+(x.maker?esc(x.maker)+' ':'')+'</span>'+esc(x.name)+'</span></div><div onclick="toggleItem(\''+id+'\')" style="cursor:pointer;margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap"><span class="pill bigpill '+esc(x.status)+'">'+esc(x.status)+'</span>'+(per!=null?'<span style="background:'+bg+';color:'+fg+';padding:3px 10px;border-radius:10px;font-weight:800;white-space:nowrap">'+(x.status==='販売中'?'販売中 ':'')+periodLabel(per)+'</span>':'')+(dup?'<button type="button" class="pill duplicate-badge" onclick="event.stopPropagation();toggleDuplicateDetails(this)" aria-expanded="'+(duplicateOpenSet[x.id]?'true':'false')+'">⚠ 重複候補 '+dup.group.length+'点（'+dup.source+'）</button>':'')+(autoExcluded?'<button type="button" class="pill duplicate-excluded-badge" onclick="event.stopPropagation();restoreAutoDuplicate(this.closest(\'.item\').dataset.duplicateId)">自動判定から除外中・戻す</button>':'')+'</div></div>'
       +(x.status!=='売却済み'?'<button class="btn accent sm" onclick="selShip(\''+id+'\')">🚚出荷依頼</button>':'')
       +'<button class="btn ghost sm" id="caret-'+id+'" onclick="toggleItem(\''+id+'\')">'+(openSet[x.id]?'▲':'▼')+'</button>'
       +(dup?duplicateDetailHtml(x,dup,duplicates):'')
@@ -1047,7 +1055,7 @@ var state=null,_pushTimer=null,_pollStarted=false,_pushFailed=false,_retryTimer=
 function CU(){return DEMO_MODE?'':((state&&state.cloudUrl)||CLOUD_URL||'');}
 function CS(){return (state&&state.cloudSecret)||CLOUD_SECRET||'';}
 
-function defaultState(){return {rev:0,logSeq:0,orderSeq:0,accessoryMoveSeq:0,counters:{},items:[],duplicateLinks:[],logs:[],delist:[],accessorySkus:[],accessoryMovements:[],orders:[],cloudUrl:'',cloudSecret:'',lineDirect:false,settings:{
+function defaultState(){return {rev:0,logSeq:0,orderSeq:0,accessoryMoveSeq:0,counters:{},items:[],duplicateLinks:[],duplicateAutoExclusions:[],logs:[],delist:[],accessorySkus:[],accessoryMovements:[],orders:[],cloudUrl:'',cloudSecret:'',lineDirect:false,settings:{
   categories:[{name:'エフェクター',prefix:'E'},{name:'ギター',prefix:'G'},{name:'ベース',prefix:'B'}],
   subcategories:[{parent:'エフェクター',name:'歪み系'},{parent:'エフェクター',name:'空間系'},{parent:'エフェクター',name:'その他'},{parent:'ギター',name:'エレキギター'},{parent:'ベース',name:'エレキベース'}],
   categoryFields:[{category:'エフェクター',label:'箱の有無',options:'箱あり,箱無し'},{category:'エフェクター',label:'アダプター',options:'有,無'},{category:'ギター',label:'ケースの有無',options:'純正ケース有,ケース有,本体のみ'},{category:'ベース',label:'ケースの有無',options:'純正ケース有,ケース有,本体のみ'}],
@@ -1064,7 +1072,7 @@ function defaultState(){return {rev:0,logSeq:0,orderSeq:0,accessoryMoveSeq:0,cou
   accessoryTypes:['スタンド','ギグバッグ','ストラップ','チューナー','その他'],
   periodColors:[{min:0,max:30,color:'赤'},{min:31,max:60,color:'橙'},{min:61,max:90,color:'黄'},{min:91,max:3650,color:'グレー'}]
 }};}
-function normalize(o){var d=defaultState();o=o||{};o.settings=Object.assign({},d.settings,o.settings||{});['items','duplicateLinks','logs','delist','accessorySkus','accessoryMovements','orders'].forEach(function(k){if(!Array.isArray(o[k]))o[k]=d[k];});o.counters=o.counters||{};o.logSeq=o.logSeq||0;o.orderSeq=Math.max(Number(o.orderSeq)||0,o.orders.reduce(function(n,x){var m=/-([0-9]+)$/.exec(x.id||'');return m?Math.max(n,Number(m[1])):n;},0));o.accessoryMoveSeq=Math.max(Number(o.accessoryMoveSeq)||0,o.accessoryMovements.reduce(function(n,x){return Math.max(n,Number(x.id)||0);},0));o.rev=o.rev||0;o.cloudUrl=o.cloudUrl||'';o.cloudSecret=o.cloudSecret||'';o.lineDirect=!!o.lineDirect;Object.keys(d.settings).forEach(function(k){if(!Array.isArray(o.settings[k]))o.settings[k]=d.settings[k];});o.accessorySkus.forEach(function(s){if(s.maker){var prefix=String(s.maker).trim();if(prefix&&String(s.name||'').indexOf(prefix)!==0)s.name=(prefix+' '+String(s.name||'')).trim();delete s.maker;}});return o;}
+function normalize(o){var d=defaultState();o=o||{};o.settings=Object.assign({},d.settings,o.settings||{});['items','duplicateLinks','duplicateAutoExclusions','logs','delist','accessorySkus','accessoryMovements','orders'].forEach(function(k){if(!Array.isArray(o[k]))o[k]=d[k];});o.counters=o.counters||{};o.logSeq=o.logSeq||0;o.orderSeq=Math.max(Number(o.orderSeq)||0,o.orders.reduce(function(n,x){var m=/-([0-9]+)$/.exec(x.id||'');return m?Math.max(n,Number(m[1])):n;},0));o.accessoryMoveSeq=Math.max(Number(o.accessoryMoveSeq)||0,o.accessoryMovements.reduce(function(n,x){return Math.max(n,Number(x.id)||0);},0));o.rev=o.rev||0;o.cloudUrl=o.cloudUrl||'';o.cloudSecret=o.cloudSecret||'';o.lineDirect=!!o.lineDirect;Object.keys(d.settings).forEach(function(k){if(!Array.isArray(o.settings[k]))o.settings[k]=d.settings[k];});o.accessorySkus.forEach(function(s){if(s.maker){var prefix=String(s.maker).trim();if(prefix&&String(s.name||'').indexOf(prefix)!==0)s.name=(prefix+' '+String(s.name||'')).trim();delete s.maker;}});return o;}
 function validStatePayload(o){return !!o&&typeof o==='object'&&!Array.isArray(o)&&Array.isArray(o.items);}
 function loadState(){var raw=localStorage.getItem(KEY);if(raw==null||raw==='')return DEMO_MODE?demoState():defaultState();var s;try{s=JSON.parse(raw);}catch(e){throw new Error('保存データのJSON解析に失敗');}if(!validStatePayload(s))throw new Error('保存データの形式が不正');return normalize(s);}
 function downloadRawState(){var raw=localStorage.getItem(KEY);if(raw==null){alert('この端末に保存データがありません');return;}var blob=new Blob([raw],{type:'application/json'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='中古販売_読込エラー原文_'+todayStr().replace(/\//g,'')+'.txt';document.body.appendChild(a);a.click();setTimeout(function(){URL.revokeObjectURL(a.href);a.remove();},1000);}
