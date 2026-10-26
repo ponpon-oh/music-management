@@ -243,7 +243,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-25f</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-26a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -259,6 +259,7 @@
     <div class="card"><h2>カテゴリごとの入力項目（複数可）</h2><p class="muted">選択肢はカンマ区切り。</p><div id="setCatField"></div><button class="btn ghost sm" onclick="addSetRow('catfield')">＋行</button><button class="btn sm" onclick="saveSet('category_fields')">保存</button></div>
     <div class="card"><h2>仕入れ担当者</h2><div id="setStaff"></div><button class="btn ghost sm" onclick="addSetRow('staff')">＋行</button><button class="btn sm" onclick="saveSet('staff')">保存</button></div>
     <div class="card"><h2>販路（手数料率%）</h2><div id="setCh"></div><button class="btn ghost sm" onclick="addSetRow('ch')">＋行</button><button class="btn sm" onclick="saveSet('channels')">保存</button></div>
+    <div class="card"><h2>販売期間の集計対象外にする販路</h2><p class="muted">指定した販路で売却済みの商品は、平均販売日数・売却明細の販売日数・1／3／6カ月以内売却率の計算から除外します。売上・利益には含めます。過去の売却分にも適用されます。</p><div id="setPeriodExcludedChannels"></div><button class="btn sm" onclick="savePeriodExcludedChannels()">保存</button></div>
     <div class="card"><h2>発送方法</h2><div id="setMethod"></div><button class="btn ghost sm" onclick="addSetRow('method')">＋行</button><button class="btn sm" onclick="saveSet('ship_methods')">保存</button></div>
     <div class="card"><h2>送料パターン</h2><p class="muted">名前＋金額＋対応発送方法。</p><div id="setPattern"></div><button class="btn ghost sm" onclick="addSetRow('pattern')">＋行</button><button class="btn sm" onclick="saveSet('ship_patterns')">保存</button></div>
     <div class="card"><h2>カテゴリ別の初期値（仕入れ時に自動入力）</h2><p class="muted">カテゴリを選ぶと、送料パターン・自宅保管・送料確認がこの値で入ります。</p><div id="setCatDef"></div><button class="btn ghost sm" onclick="addSetRow('catdef')">＋行</button><button class="btn sm" onclick="saveSet('cat_defaults')">保存</button></div>
@@ -315,7 +316,8 @@ function thumb(u){return u||'';}
 function todayStr(){var d=new Date(),p=function(n){return ('0'+n).slice(-2);};return d.getFullYear()+'/'+p(d.getMonth()+1)+'/'+p(d.getDate());}
 function parseD(s){if(!s)return null;var m=/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/.exec(String(s));return m?new Date(+m[1],+m[2]-1,+m[3]):null;}
 function daysBetween(a,b){var d1=parseD(a),d2=parseD(b);if(!d1||!d2)return null;return Math.round((d2-d1)/86400000);}
-function salePeriod(x){if(x.saleDate&&x.listDate)return daysBetween(x.listDate,x.saleDate);if(x.status==='販売中'&&x.listDate)return daysBetween(x.listDate,todayStr());return null;}
+function periodExcludedSale(x){return !!x&&x.status==='売却済み'&&!!CFG&&(CFG.periodExcludedChannels||[]).indexOf(x.channel||'')>=0;}
+function salePeriod(x){if(periodExcludedSale(x))return null;if(x.saleDate&&x.listDate)return daysBetween(x.listDate,x.saleDate);if(x.status==='販売中'&&x.listDate)return daysBetween(x.listDate,todayStr());return null;}
 function periodColor(days){if(days==null)return null;for(var i=0;i<CFG.periodColors.length;i++){var r=CFG.periodColors[i];if(days>=r.min&&days<=r.max)return COLORMAP[r.color]||r.color;}return null;}
 function periodLabel(days){if(days==null)return '';return days>=30?Math.floor(days/30)+'ヶ月':days+'日';}
 function lineUrl(msg,photo){var url=photo||SUPABASE_URL||'https://line.me';return 'https://social-plugins.line.me/lineit/share?url='+encodeURIComponent(url)+'&text='+encodeURIComponent(msg);}
@@ -811,6 +813,7 @@ function renderSettings(){
   var cf='';Object.keys(CFG.categoryFields).forEach(function(cat){CFG.categoryFields[cat].forEach(function(f){cf+=setRow('catfield',cat,f.label,(f.options||[]).join(','));});});$('setCatField').innerHTML=cf;
   $('setStaff').innerHTML=CFG.staff.map(function(s){return setRow('staff',s);}).join('');
   $('setCh').innerHTML=CFG.channels.map(function(c){return setRow('ch',c['販路名'],c['手数料率(%)']);}).join('');
+  renderPeriodExcludedChannels();
   $('setMethod').innerHTML=methodNames().map(function(m){return setRow('method',m);}).join('');
   $('setPattern').innerHTML=CFG.shipPatterns.map(function(p){return setRow('pattern',p.name,p.amount,p.method);}).join('');
   $('setOpcond').innerHTML=CFG.opConditions.map(function(s){return setRow('opcond',s,(CFG.opNoteTargets||[]).indexOf(s)>=0);}).join('');
@@ -821,6 +824,9 @@ function renderSettings(){
   $('setPColor').innerHTML=CFG.periodColors.map(function(r){return setRow('pcolor',r.min,(r.max===99999?'':r.max),r.color,r.basis);}).join('');
   renderAccessoryTypesSettings();
 }
+function renderPeriodExcludedChannels(){var el=$('setPeriodExcludedChannels');if(!el)return;var selected=state.settings.periodExcludedChannels||[],names=channelNames().slice();selected.forEach(function(n){if(names.indexOf(n)<0)names.push(n);});
+  el.innerHTML=names.length?names.map(function(n){return '<label class="switch" style="display:inline-flex;margin:0 12px 10px 0"><input type="checkbox" class="period-excluded-channel" value="'+esc(n)+'"'+(selected.indexOf(n)>=0?' checked':'')+'> '+esc(n)+(channelNames().indexOf(n)<0?'（販路設定から削除済み）':'')+'</label>';}).join(''):'<p class="muted">先に販路を登録してください。</p>';}
+function savePeriodExcludedChannels(){var selected=[];document.querySelectorAll('#setPeriodExcludedChannels .period-excluded-channel').forEach(function(cb){if(cb.checked&&selected.indexOf(cb.value)<0)selected.push(cb.value);});state.settings.periodExcludedChannels=selected;save();CFG=buildCFG();renderSettings();renderManage();if($('v-analysis').classList.contains('active'))loadAnalysis();toast('保存しました');}
 function setRow(kind,a,b,c,d){var del='<button class="btn danger sm" onclick="this.parentNode.remove()">×</button>';
   if(kind==='catdef')return '<div class="setrow"><select class="cd-cat">'+opt(catNames(),a)+'</select><select class="cd-ship"><option value=""></option>'+opt(CFG.shipPatterns.map(function(p){return p.name;}),b)+'</select><label class="switch" style="flex:0 0 auto;white-space:nowrap"><input type="checkbox" class="cd-home"'+(c&&c.home?' checked':'')+'> 🏠自宅保管</label><label class="switch" style="flex:0 0 auto;white-space:nowrap"><input type="checkbox" class="cd-chk"'+(c&&c.shipCheck?' checked':'')+'> 📮送料確認</label>'+del+'</div>';
   if(kind==='opstatus')return '<div class="setrow"><select class="os-op">'+opt(CFG.opConditions,a)+'</select><select class="os-st">'+opt(CFG.statuses,b)+'</select>'+del+'</div>';
@@ -1071,6 +1077,7 @@ function defaultState(){return {rev:0,logSeq:0,orderSeq:0,accessoryMoveSeq:0,cou
   catDefaults:[],
   opStatusMap:[],
   channelShipDefault:[],
+  periodExcludedChannels:[],
   accessoryTypes:['スタンド','ギグバッグ','ストラップ','チューナー','その他'],
   periodColors:[{min:0,max:30,color:'赤'},{min:31,max:60,color:'橙'},{min:61,max:90,color:'黄'},{min:91,max:3650,color:'グレー'}]
 }};}
@@ -1086,7 +1093,7 @@ function buildCFG(){var s=state.settings;var subs={};s.subcategories.forEach(fun
   var fields={};s.categoryFields.forEach(function(x){(fields[x.category]=fields[x.category]||[]).push({label:x.label,options:String(x.options||'').split(',').map(function(t){return t.trim();}).filter(Boolean)});});
   return {categories:s.categories.map(function(c){return {'カテゴリ名':c.name,'IDプレフィックス':c.prefix};}),subcategories:subs,categoryFields:fields,staff:s.staff.slice(),
     channels:s.channels.map(function(c){return {'販路名':c.name,'手数料率(%)':Number(c.fee)};}),shipMethodNames:s.shipMethods.slice(),
-    shipPatterns:s.shipPatterns.map(function(p){return {name:p.name,amount:Number(p.amount)||0,method:p.method};}),statuses:s.statuses.slice(),opConditions:s.opConditions.slice(),opNoteTargets:(s.opNoteTargets||[]).slice(),catDefaults:(s.catDefaults||[]).slice(),opStatusMap:(s.opStatusMap||[]).slice(),channelShipDefault:(s.channelShipDefault||[]).slice(),
+    shipPatterns:s.shipPatterns.map(function(p){return {name:p.name,amount:Number(p.amount)||0,method:p.method};}),statuses:s.statuses.slice(),opConditions:s.opConditions.slice(),opNoteTargets:(s.opNoteTargets||[]).slice(),catDefaults:(s.catDefaults||[]).slice(),opStatusMap:(s.opStatusMap||[]).slice(),channelShipDefault:(s.channelShipDefault||[]).slice(),periodExcludedChannels:(s.periodExcludedChannels||[]).slice(),
     periodColors:s.periodColors.map(function(r){return {min:Number(r.min)||0,max:(r.max==null||r.max===''?99999:Number(r.max)),color:r.color,basis:r.basis||''};}),conditions:CONDITIONS};}
 function rebuildAll(){CFG=buildCFG();STOCK=state.items;buySuggestionsDirty=true;STOCK.forEach(function(x){if(!x.listings||typeof x.listings!=='object')x.listings={};});STOCK.forEach(computeProfits);fillSelectors();renderDelist();renderManage();renderShipList();renderDash(dashFromStock());renderAccessories();if(document.getElementById('v-analysis').classList.contains('active'))loadAnalysis();if(document.getElementById('v-settings').classList.contains('active'))renderSettings();refreshOpenLogs();}
 function nextId(prefix){var mx=state.counters[prefix]||0;var re=new RegExp('^'+prefix+'(\\d+)$');state.items.forEach(function(x){var m=re.exec(x.id);if(m)mx=Math.max(mx,parseInt(m[1],10));});var n=mx+1;state.counters[prefix]=n;return prefix+('0000'+n).slice(-4);}
@@ -1445,7 +1452,7 @@ function saleRateDate(s){
   return d.getUTCFullYear()===Number(m[1])&&d.getUTCMonth()===Number(m[2])-1&&d.getUTCDate()===Number(m[3])?d:null;
 }
 function stockSaleRateStats(days,asOf){
-  var sold=0,soldWithin=0,activeSelling=0,activeWithin=0,soldInvalidDates=0,activeInvalidDates=0,now=saleRateDate(asOf||todayStr());
+  var sold=0,soldWithin=0,activeSelling=0,activeWithin=0,soldInvalidDates=0,soldExcludedChannels=0,activeInvalidDates=0,now=saleRateDate(asOf||todayStr());
   STOCK.forEach(function(x){
     if(x.status!=='売却済み'&&x.status!=='販売中')return;
     if(anF.cat&&x.category!==anF.cat)return;
@@ -1458,6 +1465,7 @@ function stockSaleRateStats(days,asOf){
       if((now-started)/86400000<=days)activeWithin++;
       return;
     }
+    if(periodExcludedSale(x)){soldExcludedChannels++;return;}
     var started=saleRateDate(x.listDate),ended=saleRateDate(x.saleDate);
     if(!started||!ended||!now||started>ended||ended>now){soldInvalidDates++;return;}
     sold++;
@@ -1465,12 +1473,12 @@ function stockSaleRateStats(days,asOf){
   });
   var eligible=sold+activeSelling;
   var within=soldWithin+activeWithin;
-  return {days:days,sold:sold,soldWithin:soldWithin,activeSelling:activeSelling,activeWithin:activeWithin,soldInvalidDates:soldInvalidDates,activeInvalidDates:activeInvalidDates,within:within,eligible:eligible,rate:eligible?Math.round(within/eligible*1000)/10:null};
+  return {days:days,sold:sold,soldWithin:soldWithin,activeSelling:activeSelling,activeWithin:activeWithin,soldInvalidDates:soldInvalidDates,soldExcludedChannels:soldExcludedChannels,activeInvalidDates:activeInvalidDates,within:within,eligible:eligible,rate:eligible?Math.round(within/eligible*1000)/10:null};
 }
 function stockTurnoverHtml(){
   var defs=[[30,'1カ月以内売却率'],[90,'3カ月以内売却率'],[180,'6カ月以内売却率']],stats=defs.map(function(d){return {label:d[1],value:stockSaleRateStats(d[0])};});
-  return '<div class="card"><h3>📦 期間内売却率（本体商品）</h3><div class="kpis small">'+stats.map(function(o){var s=o.value;return '<div class="kpi sm blue"><div class="n">'+(s.rate==null?'—':s.rate+'%')+'</div><div class="l">'+o.label+'</div><div class="muted">（期間内に売却 '+s.soldWithin+'件＋販売中で期間内 '+s.activeWithin+'件）÷（売却済み '+s.sold+'件＋販売中 '+s.activeSelling+'件）<br>計 '+s.within+'件 ÷ '+s.eligible+'件／販売期間不明で集計から除外：売却済み '+s.soldInvalidDates+'件・販売中 '+s.activeInvalidDates+'件</div></div>';}).join('')+'</div>'
-    +'<p class="muted">販売開始から売却までが30・90・180日以内の売却済み商品と、販売開始から現在までが同期間以内の「販売中」商品を分子に含めます。分母には販売期間を判定できる「売却済み」＋「販売中」の商品だけを含めます。開始日・売却日が未設定、不正、未来日の場合は分子と分母の両方から除外します。まだ売れていない期間内の商品も分子に入るため、この数値は実際に売れた商品の割合ではありません。カテゴリ・小カテゴリ・担当者の絞り込みは反映します。現在の在庫状態を基準にするため、上の期間指定と販路の絞り込みは適用しません。</p></div>';
+  return '<div class="card"><h3>📦 期間内売却率（本体商品）</h3><div class="kpis small">'+stats.map(function(o){var s=o.value;return '<div class="kpi sm blue"><div class="n">'+(s.rate==null?'—':s.rate+'%')+'</div><div class="l">'+o.label+'</div><div class="muted">（期間内に売却 '+s.soldWithin+'件＋販売中で期間内 '+s.activeWithin+'件）÷（売却済み '+s.sold+'件＋販売中 '+s.activeSelling+'件）<br>計 '+s.within+'件 ÷ '+s.eligible+'件／販売期間不明で集計から除外：売却済み '+s.soldInvalidDates+'件・販売中 '+s.activeInvalidDates+'件／設定した販路で除外：売却済み '+s.soldExcludedChannels+'件</div></div>';}).join('')+'</div>'
+    +'<p class="muted">販売開始から売却までが30・90・180日以内の売却済み商品と、販売開始から現在までが同期間以内の「販売中」商品を分子に含めます。分母には販売期間を判定できる「売却済み」＋「販売中」の商品だけを含めます。設定で販売期間の集計対象外にした販路の売却済み商品、および開始日・売却日が未設定、不正、未来日の商品は分子と分母の両方から除外します。まだ売れていない期間内の商品も分子に入るため、この数値は実際に売れた商品の割合ではありません。カテゴリ・小カテゴリ・担当者の絞り込みは反映します。現在の在庫状態を基準にするため、上の期間指定と販路の絞り込みは適用しません。</p></div>';
 }
 function loadAnalysis(){
   if(!CFG||!$('analysisBody'))return;
