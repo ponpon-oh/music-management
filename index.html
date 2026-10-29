@@ -182,7 +182,8 @@
       </div>
       <div id="shipAccessoryBox" class="card" style="display:none;margin-top:12px;background:#f8fbfa"><h3>🪛 同梱する付属品</h3><p class="muted">ギター・ベースと一緒に発送します。付属品を追加しても送料は増やさず、全額を本体の利益から引きます。</p><div id="shipAccessoryRows"></div><button class="btn ghost sm" onclick="addShipAccessoryRow()">＋ 付属品を追加</button></div>
       <div id="shipCalc" style="margin-top:8px"></div><div class="hr"></div>
-      <button class="btn accent" id="shipGo" onclick="doShip()">✅ 在庫から差引 ＆ LINEを開く</button>
+      <button class="btn accent" id="shipGo" onclick="doShip(true)">✅ 在庫から差引 ＆ LINEを開く</button>
+      <button class="btn ghost" id="shipOnlyGo" onclick="doShip(false)">在庫差引のみ</button>
       <div id="shipOut"></div>
     </div>
     <div id="manageList"><div class="loading">読み込み中…</div></div>
@@ -243,7 +244,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-29a</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-29b</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -761,7 +762,7 @@ function renderShipList(){var el=$('shipList');if(!el)return;var q=$('shipSearch
   el.innerHTML=list.length?list.map(function(x){var ph=x.photo?'style="background-image:url('+esc(x.photo)+')"':'';
     return '<div class="shiprow" onclick="selShip(\''+esc(x.id)+'\')"><div class="ph" '+ph+'>'+(x.photo?'':'No Img')+'</div><div class="m"><div class="id">'+esc(x.id)+' '+pill(x.status)+'</div><div class="nm">'+esc(x.name)+'</div><div class="sub">'+esc(x.category)+' / '+esc(x.maker)+' ・ 仕入 '+yen(x.cost)+'円</div></div></div>';}).join(''):'<div class="loading">対象商品なし</div>';}
 function selShip(id){SEL.ship=STOCK.filter(function(x){return x.id===id;})[0];var x=SEL.ship;
-  $('shipPanel').style.display='block';$('shipOut').innerHTML='';$('shipGo').disabled=false;$('shipGo').textContent=DEMO_MODE?'✅ デモで在庫から差引':'✅ 在庫から差引 ＆ LINEを開く';
+  $('shipPanel').style.display='block';$('shipOut').innerHTML='';$('shipGo').disabled=false;$('shipGo').textContent=DEMO_MODE?'✅ デモで在庫から差引':'✅ 在庫から差引 ＆ LINEを開く';$('shipOnlyGo').disabled=false;
   var homeAlert=x.home?'<div class="msgbox" style="background:#ffebee;border:2px solid #e53935;color:#c62828;font-weight:800;font-size:17px;text-align:center;padding:14px;margin-bottom:10px">🏠 自宅保管中の商品です！発送前に必ずご確認ください</div>':'';
   $('shipSel').innerHTML=homeAlert+'<div class="row" style="align-items:center"><div style="flex:0">'+(x.photo?'<img class="thumb" src="'+esc(x.photo)+'">':'')+'</div><div><b>'+esc(x.id)+'</b> '+esc(x.maker)+' '+esc(x.name)+'<br><span class="muted">仕入 '+yen(x.cost)+'円'+(x.listDate?' ・ 販売日 '+esc(x.listDate):'')+'</span></div></div>';
   $('shipPattern').value=x.shipPattern||'';
@@ -1207,7 +1208,7 @@ async function doPhotoUpload(id,file){toast('写真を処理中…');var dataUrl
   if(CU()){try{var res=await fetch(CU(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'photo',secret:CS(),name:id,data:dataUrl})});var j=await res.json();it.photo=(j&&j.url)?j.url:dataUrl;}catch(e){it.photo=dataUrl;}}else{it.photo=dataUrl;}
   save();var ph=document.querySelector('#it-'+id+' .ph');if(ph){if(document.getElementById('showImg').checked){ph.style.backgroundImage='url('+it.photo+')';ph.innerHTML='';}else ph.innerHTML='写真あり<span>📷変更</span>';}toast('写真を登録しました');}
 
-function doShip(){var x=SEL.ship;if(!x)return;
+function doShip(sendLine){var x=SEL.ship;if(!x)return;
   if(x.status==='売却済み'){toast('この本体は出荷済みです');return;}
   var ch=$('shipChannel').value,pat=$('shipPattern').value,price=Number($('shipPrice').value);
   if(!pat){toast('送料パターンを選んでください');return;}
@@ -1229,10 +1230,11 @@ function doShip(){var x=SEL.ship;if(!x)return;
   if(others.length){out+='<div class="acc-alert"><b>🔻 他サイトの出品を取り下げてください</b></div>';out+=others.map(function(n){return '<p><a class="btn accent" style="text-decoration:none;display:inline-block" target="_blank" rel="noopener" href="'+esc(ls[n])+'">🔻 '+esc(n)+' の出品を開く ↗</a></p>';}).join('');}
   var fullText=msg+(directImg(x.photo)?('\n商品写真：'+directImg(x.photo)):'');
   var openUrl='https://line.me/R/msg/text/?'+encodeURIComponent(fullText);
-  if(DEMO_MODE){out+='<p class="muted">デモのためLINEは開きません。実際の出荷依頼文：</p><div class="msgbox">'+esc(fullText)+'</div>';}
+  if(sendLine===false){out+='<p class="muted">LINEは開いていません。</p>';}
+  else if(DEMO_MODE){out+='<p class="muted">デモのためLINEは開きません。実際の出荷依頼文：</p><div class="msgbox">'+esc(fullText)+'</div>';}
   else{try{window.open(openUrl,'_blank');}catch(e){}out+='<p><a class="btn accent" style="text-decoration:none;display:inline-block" target="_blank" href="'+openUrl+'">📩 LINEを開く</a></p>';}
   if(x.photo)out+='<img src="'+esc(x.photo)+'" style="max-width:220px;border-radius:8px">';
-  $('shipOut').innerHTML=out;$('shipGo').disabled=true;$('shipGo').textContent='完了（差引済み）';renderDelist();renderManage();renderShipList();renderAccessories();renderDash(dashFromStock());refreshOpenLogs();toast('出荷依頼を記録しました');}
+  $('shipOut').innerHTML=out;$('shipGo').disabled=true;$('shipOnlyGo').disabled=true;$('shipGo').textContent='完了（差引済み）';renderDelist();renderManage();renderShipList();renderAccessories();renderDash(dashFromStock());refreshOpenLogs();toast('出荷依頼を記録しました');}
 
 function mapLog(g){return {logId:g.id,date:g.at,type:g.type,id:g.item_id,name:g.name,detail:g.detail,state:g.state};}
 function loadLogs(){document.getElementById('logBody').innerHTML=logsTable(state.logs.slice().reverse().slice(0,80).map(mapLog));}
@@ -1672,7 +1674,7 @@ function selectStandaloneAccessory(sku){var s=findAccessory(sku);if(!s||!(Number
     +'<div><label>今回の販売単価</label><input id="standalonePrice" type="number" min="1" step="1" value="'+(accessoryStandalonePrice(s)||'')+'" oninput="calcStandaloneShip()"></div>'
     +'<div><label>登録済みの送料パターン</label><input readonly value="'+esc(pat)+'（'+yen(patternFee(pat))+'円）" style="background:#f5f5f5"></div>'
     +'<div><label>発送方法（自動）</label><input readonly value="'+esc(patternMethod(pat))+'" style="background:#f5f5f5"></div></div>'
-    +'<div id="standaloneCalc" style="margin-top:8px"></div><button class="btn accent" id="standaloneGo" onclick="doStandaloneShip()">✅ 在庫から差引 ＆ LINEを開く</button></div>';
+    +'<div id="standaloneCalc" style="margin-top:8px"></div><button class="btn accent" id="standaloneGo" onclick="doStandaloneShip(true)">✅ 在庫から差引 ＆ LINEを開く</button> <button class="btn ghost" id="standaloneOnlyGo" onclick="doStandaloneShip(false)">在庫差引のみ</button></div>';
   if(DEMO_MODE)$('standaloneGo').textContent='✅ デモで在庫から差引';
   calcStandaloneShip();$('standaloneAccessoryForm').scrollIntoView({behavior:'smooth',block:'nearest'});}
 function standaloneChannelChange(){calcStandaloneShip();}
@@ -1684,7 +1686,7 @@ function calcStandaloneShip(){var s=findAccessory(standaloneAccessorySelected),e
   if(!pat||!patternMethod(pat)){el.innerHTML='<div class="acc-alert">付属品タブで送料パターンを設定してください。</div>';return;}
   var c=calculateStandaloneAccessorySale(s,ch,qty,unitPrice);
   el.innerHTML='<div class="msgbox">売上 '+yen(c.revenue)+'円（'+yen(unitPrice)+'円 × '+yen(qty)+'点）<br>仕入原価 '+yen(c.cost)+'円 ・ 販路手数料 '+yen(c.fee)+'円 ・ 送料 '+yen(c.shipping)+'円<br><b>単品販売の利益 '+profitHtml(c.profit)+'</b></div>';}
-function doStandaloneShip(){var s=findAccessory(standaloneAccessorySelected);if(!s)return;
+function doStandaloneShip(sendLine){var s=findAccessory(standaloneAccessorySelected);if(!s)return;
   var ch=$('standaloneChannel').value,pat=accessoryShipPattern(s),qty=Number($('standaloneQty').value),unitPrice=Number($('standalonePrice').value);
   if(!ch||!pat||!patternMethod(pat)){toast('販路と、付属品に登録した送料パターンを確認してください');return;}
   if(!validWhole(qty,1)||qty>Number(s.qty)||!validWhole(unitPrice,1)){toast('数量・販売単価・在庫を確認してください');return;}
@@ -1696,7 +1698,8 @@ function doStandaloneShip(){var s=findAccessory(standaloneAccessorySelected);if(
   logAction('出荷',s.sku,s.name,ch+' 付属品単品 '+qty+'点 / 売上 '+c.revenue+'円 / 利益 '+c.profit+'円 / '+method+'('+pat+')',{orderId:orderId,kind:'accessory-standalone'});save();
   var msg='【出荷依頼】\n付属品単品販売\n商品ID：'+s.sku+'\n種類：'+s.type+'\n商品名：'+s.name+'\n数量：'+qty+'点\n発送方法：'+method+'\n依頼日：'+today;
   var out='<div class="msgbox"><b>'+esc(s.sku)+' を '+yen(qty)+'点、在庫から差し引きました。</b><br>売上 '+yen(c.revenue)+'円 ・ 販路手数料 '+yen(c.fee)+'円 ・ 送料 '+yen(c.shipping)+'円 ・ 利益 '+yen(c.profit)+'円<br>誤登録は下の「操作ログ（出荷）」から取り消せます。</div>';
-  if(DEMO_MODE)out+='<p class="muted">デモのためLINEは開きません。実際の出荷依頼文：</p><div class="msgbox">'+esc(msg)+'</div>';
+  if(sendLine===false)out+='<p class="muted">LINEは開いていません。</p>';
+  else if(DEMO_MODE)out+='<p class="muted">デモのためLINEは開きません。実際の出荷依頼文：</p><div class="msgbox">'+esc(msg)+'</div>';
   else{var openUrl='https://line.me/R/msg/text/?'+encodeURIComponent(msg);try{window.open(openUrl,'_blank');}catch(e){}out+='<p><a class="btn accent" style="text-decoration:none;display:inline-block" target="_blank" rel="noopener" href="'+openUrl+'">📩 LINEを開く</a></p>';}
   standaloneAccessorySelected='';$('standaloneAccessoryForm').innerHTML='';$('standaloneAccessoryOut').innerHTML=out;
   renderStandaloneAccessoryList();renderAccessories();renderDash(dashFromStock());refreshOpenLogs();toast('付属品の単品出荷依頼を記録しました');}
