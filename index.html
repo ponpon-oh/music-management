@@ -243,7 +243,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-26a</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-29a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -1694,7 +1694,7 @@ function doStandaloneShip(){var s=findAccessory(standaloneAccessorySelected);if(
   state.orders.push({id:orderId,kind:'accessory-standalone',date:today,channel:ch,shipPattern:pat,method:method,accessories:[line],totalRevenue:c.revenue,totalCost:c.cost,fee:c.fee,shipping:c.shipping,profit:c.profit,status:'有効'});
   s.qty-=qty;state.accessoryMovements.push({id:++state.accessoryMoveSeq,at:nowStr(),sku:s.sku,type:'単品販売',qty:-qty,unitCost:line.unitCost,avgCostAfter:s.avgCost,stockAfter:s.qty,orderId:orderId,note:'単品出荷'});
   logAction('出荷',s.sku,s.name,ch+' 付属品単品 '+qty+'点 / 売上 '+c.revenue+'円 / 利益 '+c.profit+'円 / '+method+'('+pat+')',{orderId:orderId,kind:'accessory-standalone'});save();
-  var msg='【出荷依頼】\n付属品単品販売\n商品ID：'+s.sku+'\n種類：'+s.type+'\n商品名：'+s.name+'\n数量：'+qty+'点\n販売価格：'+yen(c.revenue)+'円\n販路：'+ch+'\n発送方法：'+method+'\n依頼日：'+today;
+  var msg='【出荷依頼】\n付属品単品販売\n商品ID：'+s.sku+'\n種類：'+s.type+'\n商品名：'+s.name+'\n数量：'+qty+'点\n発送方法：'+method+'\n依頼日：'+today;
   var out='<div class="msgbox"><b>'+esc(s.sku)+' を '+yen(qty)+'点、在庫から差し引きました。</b><br>売上 '+yen(c.revenue)+'円 ・ 販路手数料 '+yen(c.fee)+'円 ・ 送料 '+yen(c.shipping)+'円 ・ 利益 '+yen(c.profit)+'円<br>誤登録は下の「操作ログ（出荷）」から取り消せます。</div>';
   if(DEMO_MODE)out+='<p class="muted">デモのためLINEは開きません。実際の出荷依頼文：</p><div class="msgbox">'+esc(msg)+'</div>';
   else{var openUrl='https://line.me/R/msg/text/?'+encodeURIComponent(msg);try{window.open(openUrl,'_blank');}catch(e){}out+='<p><a class="btn accent" style="text-decoration:none;display:inline-block" target="_blank" rel="noopener" href="'+openUrl+'">📩 LINEを開く</a></p>';}
