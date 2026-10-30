@@ -244,7 +244,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-29b</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-10-30a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -1662,7 +1662,7 @@ function accessoryShipPattern(s){return String(s.standaloneShipPattern||'');}
 var standaloneAccessorySelected='';
 function renderStandaloneAccessoryList(){var el=$('standaloneAccessoryList');if(!el||!state)return;
   var skus=(state.accessorySkus||[]).slice().sort(function(a,b){return String(a.type||'').localeCompare(String(b.type||'','ja'))||String(a.name||'').localeCompare(String(b.name||'','ja'));});
-  el.innerHTML=skus.length?'<table><tr><th>商品ID</th><th>種類・商品名</th><th>在庫</th><th>単品価格</th><th>単品時の送料パターン</th><th></th></tr>'+skus.map(function(s){var pat=accessoryShipPattern(s),configured=!!patternMethod(pat);return '<tr><td>'+esc(s.sku)+'</td><td>'+esc(s.type||'')+'｜'+esc(s.name||'')+'</td><td>'+yen(s.qty)+'点</td><td>'+yen(accessoryStandalonePrice(s))+'円</td><td>'+(configured?esc(pat)+'（'+yen(patternFee(pat))+'円）':'<span class="neg">未設定</span>')+'</td><td><button class="btn accent sm" data-sku="'+esc(s.sku)+'" onclick="selectStandaloneAccessory(this.dataset.sku)"'+(Number(s.qty)>0&&configured?'':' disabled')+'>🚚 出荷依頼</button></td></tr>';}).join('')+'</table>':'<p class="muted">付属品がまだ登録されていません。</p>';}
+  el.innerHTML=skus.length?'<table><tr><th>出荷依頼</th><th>商品ID</th><th>種類・商品名</th><th>在庫</th><th>単品価格</th><th>単品時の送料パターン</th></tr>'+skus.map(function(s){var pat=accessoryShipPattern(s),configured=!!patternMethod(pat);return '<tr><td><button class="btn accent sm" data-sku="'+esc(s.sku)+'" onclick="selectStandaloneAccessory(this.dataset.sku)"'+(Number(s.qty)>0&&configured?'':' disabled')+'>🚚 出荷依頼</button></td><td>'+esc(s.sku)+'</td><td>'+esc(s.type||'')+'｜'+esc(s.name||'')+'</td><td>'+yen(s.qty)+'点</td><td>'+yen(accessoryStandalonePrice(s))+'円</td><td>'+(configured?esc(pat)+'（'+yen(patternFee(pat))+'円）':'<span class="neg">未設定</span>')+'</td></tr>';}).join('')+'</table>':'<p class="muted">付属品がまだ登録されていません。</p>';}
 function selectStandaloneAccessory(sku){var s=findAccessory(sku);if(!s||!(Number(s.qty)>0)){toast('この付属品の在庫がありません');return;}
   if(!patternMethod(accessoryShipPattern(s))){toast('付属品タブで単品時の送料パターンを設定してください');return;}
   standaloneAccessorySelected=sku;$('standaloneAccessoryOut').innerHTML='';
