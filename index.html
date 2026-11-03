@@ -35,6 +35,7 @@
   .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px} .kpis.small{grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-top:10px}
   .kpi{background:#fff;border:1px solid var(--line);border-radius:10px;padding:16px} .kpi .n{font-size:26px;font-weight:700} .kpi .l{font-size:12px;color:var(--sub)}
   .kpi.sm{padding:12px} .kpi.sm .n{font-size:18px} .kpi.blue .n{color:#1565c0} .kpi.green .n{color:var(--ok)} .kpi.orange .n{color:var(--accent)}
+  .kpi.alert .n{color:var(--bad)}
   @media(max-width:640px){.kpis{grid-template-columns:1fr 1fr}}
   table{width:100%;border-collapse:collapse;font-size:13px} th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line)} th{color:var(--sub);font-weight:600}
   .pill{display:inline-block;padding:1px 8px;border-radius:10px;font-size:11px;font-weight:600;background:#eceff1;color:#607d8b}
@@ -77,10 +78,12 @@
   #login{max-width:360px;margin:12vh auto;padding:24px} #login h1{font-size:20px;text-align:center;margin:0 0 4px} #login p{text-align:center;color:var(--sub);margin:0 0 16px}
   .herorow{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
   .herorow .hero{margin-bottom:0}
+  .herorow .hero.alert{background:#ffebee;color:var(--bad);border:2px solid #ef9a9a}
+  .overview-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
   .hero .n{font-size:clamp(26px,4.4vw,46px)}
   .hero.fy{background:linear-gradient(135deg,#1565c0,#42a5f5)}
   .hero.mo{background:linear-gradient(135deg,#ef6c00,#ffa726)}
-  @media(max-width:760px){.herorow{grid-template-columns:1fr}}
+  @media(max-width:760px){.herorow,.overview-kpis{grid-template-columns:1fr}}
   tr.anrow:hover{background:#f1f8f7}
   #shipPanel{border-color:var(--accent);box-shadow:0 2px 10px rgba(239,108,0,.12)}
   .axisbtns button{font-size:14px;padding:7px 16px}
@@ -244,7 +247,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-11-01a</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-11-03a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -431,17 +434,17 @@ function analysisFromStock(fromStr,toStr){
 }
 function renderDash(d){
   var el=$('anKpis');if(!el)return;
+  var oneMonth=stockSaleRateStats(30,null,true);
   el.innerHTML=
     '<div class="herorow">'
-    +'<div class="hero"><div class="l">累計利益</div><div class="n">'+yen(d.grossProfit)+' 円</div><div class="s">全期間</div></div>'
-    +'<div class="hero fy"><div class="l">今年度利益</div><div class="n">'+yen(d.fyProfit)+' 円</div><div class="s">'+esc(d.fyLabel||'')+'</div></div>'
-    +'<div class="hero mo"><div class="l">今月利益</div><div class="n">'+yen(d.monthProfit)+' 円</div><div class="s">'+esc(d.monthLabel||'')+'</div></div>'
+    +'<div class="hero"><div class="l">今月売上</div><div class="n">'+yen(d.monthRevenue)+' 円</div><div class="s">'+esc(d.monthLabel||'')+'</div></div>'
+    +'<div class="hero fy"><div class="l">利益率</div><div class="n">'+d.marginRate+'%</div><div class="s">累計利益 ÷ 累計売上</div></div>'
+    +'<div class="hero mo'+(oneMonth.rate!=null&&oneMonth.rate<70?' alert':'')+'"><div class="l">1カ月以内在庫回転率</div><div class="n">'+(oneMonth.rate==null?'—':oneMonth.rate+'%')+'</div><div class="s">販売中も含む現行式・本体商品</div></div>'
     +'</div>'
-    +'<div class="kpis"><div class="kpi blue"><div class="n">'+d.marginRate+'%</div><div class="l">利益率（累計利益÷累計売上）</div></div>'
+    +'<div class="overview-kpis"><div class="kpi'+(d.netProfit<0?' alert':'')+'"><div class="n">'+yen(d.netProfit)+'円</div><div class="l">累計キャッシュフロー（累計利益−在庫評価額）</div></div>'
+      +'<div class="kpi'+(d.stockValue>3000000?' alert':'')+'"><div class="n">'+yen(d.stockValue)+'円</div><div class="l">在庫評価額</div></div>'
       +'<div class="kpi"><div class="n">'+yen(d.soldRevenue)+'円</div><div class="l">累計売上</div></div>'
-      +'<div class="kpi green"><div class="n">'+yen(d.netProfit)+'円</div><div class="l">累計キャッシュフロー（利益−在庫評価額）</div></div></div>'
-    +'<div class="kpis small"><div class="kpi sm"><div class="n">'+d.soldCount+'点</div><div class="l">本体の売却点数</div></div>'
-      +'<div class="kpi sm orange"><div class="n">'+yen(d.stockValue)+'円</div><div class="l">在庫評価額（参考）</div></div></div>';
+      +'<div class="kpi"><div class="n">'+yen(d.grossProfit)+'円</div><div class="l">累計利益</div></div></div>';
 }
 function drawMonthlyChart(monthly){
   var cv=$('monthChart');if(!cv||typeof Chart==='undefined'||!monthly.length)return;
@@ -1323,7 +1326,7 @@ async function doCsvImport(inp){var f=inp.files[0];if(!f)return;if(!confirm('CSV
 var FISCAL_START_MONTH=1; /* 1=暦年(1〜12月)。4月始まりの年度にしたい場合は 4 に変更 */
 function fyOf(y,m){return (m>=FISCAL_START_MONTH)?y:y-1;}
 function dashFromStock(){
-  var g=0,rev=0,sc=0,sv=0,byCat={},recent=[],monthly={},fyG=0,mG=0;
+  var g=0,rev=0,sc=0,sv=0,byCat={},recent=[],monthly={},fyG=0,mG=0,mR=0;
   var now=new Date(),nowY=now.getFullYear(),nowM=now.getMonth()+1,curFY=fyOf(nowY,nowM);
   STOCK.forEach(function(x){
     if(!byCat[x.category])byCat[x.category]={sold:0,profit:0,revenue:0};
@@ -1336,7 +1339,7 @@ function dashFromStock(){
       var dt=parseD(x.saleDate);
       if(dt){var yy=dt.getFullYear(),mm=dt.getMonth()+1;
         if(fyOf(yy,mm)===curFY)fyG+=p;
-        if(yy===nowY&&mm===nowM)mG+=p;}
+        if(yy===nowY&&mm===nowM){mG+=p;mR+=r;}}
     } else sv+=itemTotalCost(x);
    });
    standaloneAccessorySales().forEach(function(x){var r=Number(x.salePrice)||0,p=Number(x.profit)||0;
@@ -1345,13 +1348,13 @@ function dashFromStock(){
      recent.push({id:x.id,name:x.name,channel:x.channel,salePrice:r,profit:p,date:x.saleDate});
      var mk=(x.saleDate&&x.saleDate.length>=7)?x.saleDate.substring(0,7).replace('/','-'):'未設定';
      if(!monthly[mk])monthly[mk]={revenue:0,gross:0};monthly[mk].revenue+=r;monthly[mk].gross+=p;
-     var dt=parseD(x.saleDate);if(dt){var yy=dt.getFullYear(),mm=dt.getMonth()+1;if(fyOf(yy,mm)===curFY)fyG+=p;if(yy===nowY&&mm===nowM)mG+=p;}
+     var dt=parseD(x.saleDate);if(dt){var yy=dt.getFullYear(),mm=dt.getMonth()+1;if(fyOf(yy,mm)===curFY)fyG+=p;if(yy===nowY&&mm===nowM){mG+=p;mR+=r;}}
    });
    (state.accessorySkus||[]).forEach(function(s){sv+=Math.round((Number(s.qty)||0)*(Number(s.avgCost)||0));});
    recent.sort(function(a,b){return (b.date||'').localeCompare(a.date||'');});
   var months=Object.keys(monthly).filter(function(m){return m!=='未設定';}).sort();
   return {grossProfit:g,stockValue:sv,netProfit:g-sv,marginRate:rev>0?Math.round(g/rev*1000)/10:0,soldRevenue:rev,soldCount:sc,
-    fyProfit:fyG,monthProfit:mG,
+    fyProfit:fyG,monthProfit:mG,monthRevenue:mR,
     fyLabel:(FISCAL_START_MONTH===1?(curFY+'年'):(curFY+'年度（'+FISCAL_START_MONTH+'月〜）')),
     monthLabel:(nowY+'年'+nowM+'月'),
     byCategory:byCat,recentSales:recent.slice(0,8),
@@ -1470,13 +1473,13 @@ function saleRateDate(s){
   var d=new Date(Date.UTC(Number(m[1]),Number(m[2])-1,Number(m[3])));
   return d.getUTCFullYear()===Number(m[1])&&d.getUTCMonth()===Number(m[2])-1&&d.getUTCDate()===Number(m[3])?d:null;
 }
-function stockSaleRateStats(days,asOf){
+function stockSaleRateStats(days,asOf,allItems){
   var sold=0,soldWithin=0,activeSelling=0,activeWithin=0,soldInvalidDates=0,soldExcludedChannels=0,activeInvalidDates=0,now=saleRateDate(asOf||todayStr());
   STOCK.forEach(function(x){
     if(x.status!=='売却済み'&&x.status!=='販売中')return;
-    if(anF.cat&&x.category!==anF.cat)return;
-    if(anF.sub&&(x.subCategory||'')!==anF.sub)return;
-    if(anF.staff&&(x.staff||'')!==anF.staff)return;
+    if(!allItems&&anF.cat&&x.category!==anF.cat)return;
+    if(!allItems&&anF.sub&&(x.subCategory||'')!==anF.sub)return;
+    if(!allItems&&anF.staff&&(x.staff||'')!==anF.staff)return;
     if(x.status==='販売中'){
       var started=saleRateDate(x.listDate);
       if(!started||!now||started>now){activeInvalidDates++;return;}
