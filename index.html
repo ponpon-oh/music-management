@@ -247,7 +247,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-11-10a</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-11-10b</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -1384,7 +1384,7 @@ function sortList(list){var m=document.getElementById('mSort'),v=m?m.value:'pasc
     if(pa==null&&pb==null)return 0;if(pa==null)return 1;if(pb==null)return -1;
     return v==='pdesc'?(pb-pa):(pa-pb);});}
 /* ====== 売上・仕入分析（軸切替・絞り込み・ドリルダウン） ====== */
-var anFrom='',anTo='',anLabel='全期間',anPeriodKey='all',anAxis='month',anMode='sales',anChart=null,AN_ROWS=[],anDetailOpen=false;
+var anFrom='',anTo='',anLabel='全期間',anPeriodKey='all',anAxis='month',anMode='sales',anChart=null,turnoverChart=null,AN_ROWS=[],anDetailOpen=false;
 var anF={cat:'',sub:'',staff:'',ch:''};
 var AN_AXES=[['month','📅 月ごとの推移'],['category','🗂 カテゴリごと'],['sub','📁 小カテゴリごと'],['staff','👤 担当者ごと'],['channel','🛒 販路ごと']];
 function fmtISO(d){var q=function(n){return ('0'+n).slice(-2);};return d.getFullYear()+'-'+q(d.getMonth()+1)+'-'+q(d.getDate());}
@@ -1487,9 +1487,14 @@ function stockSaleRateStats(days,asOf,allItems){
       activeSelling++;
       return;
     }
-    if(periodExcludedSale(x)){soldExcludedChannels++;return;}
     var started=saleRateDate(x.listDate),ended=saleRateDate(x.saleDate);
-    if(!started||!ended||!now||started>ended||ended>now){soldInvalidDates++;return;}
+    if(!started||!ended||!now||started>ended){soldInvalidDates++;return;}
+    if(ended>now){
+      if(ended>saleRateDate(todayStr())){soldInvalidDates++;return;}
+      if(started<=now)activeSelling++;
+      return;
+    }
+    if(periodExcludedSale(x)){soldExcludedChannels++;return;}
     sold++;
     if((ended-started)/86400000<=days)soldWithin++;
   });
@@ -1502,13 +1507,44 @@ function stockTurnoverHtml(){
   return '<div class="card"><h3>📦 期間内在庫回転率（本体商品）</h3><div class="kpis small">'+stats.map(function(o){var s=o.value;return '<div class="kpi sm blue"><div class="n">'+(s.rate==null?'—':s.rate+'%')+'</div><div class="l">'+o.label+'</div><div class="muted">期間内に売却 '+s.soldWithin+'件 ÷（販売中 '+s.activeSelling+'件＋期間を集計する売却済み '+s.sold+'件）<br>計 '+s.within+'件 ÷ '+s.eligible+'件／販売期間不明で集計から除外：売却済み '+s.soldInvalidDates+'件・販売中 '+s.activeInvalidDates+'件／設定した販路で除外：売却済み '+s.soldExcludedChannels+'件</div></div>';}).join('')+'</div>'
     +'<p class="muted">分子は販売開始から売却までが30・90・180日以内の売却済み商品数です。分母は販売開始日が確認できる「販売中」と、販売期間を集計できる「売却済み」の商品数です。販売中の商品は分子に含めません。設定で販売期間の集計対象外にした販路の売却済み商品、および開始日・売却日が未設定、不正、未来日の商品は分子と分母の両方から除外します。カテゴリ・小カテゴリ・担当者の絞り込みは反映します。現在の在庫状態を基準にするため、上の期間指定と販路の絞り込みは適用しません。</p></div>';
 }
+function stockTurnoverMonthlyRows(){
+  var today=saleRateDate(todayStr()),last=new Date(Date.UTC(today.getUTCFullYear(),today.getUTCMonth(),0)),first=null;
+  STOCK.forEach(function(x){
+    if(x.status!=='販売中'&&x.status!=='売却済み')return;
+    if(anF.cat&&x.category!==anF.cat)return;
+    if(anF.sub&&(x.subCategory||'')!==anF.sub)return;
+    if(anF.staff&&(x.staff||'')!==anF.staff)return;
+    var started=saleRateDate(x.listDate);
+    if(started&&started<=last&&(!first||started<first))first=started;
+  });
+  if(!first)return [];
+  var from=anFrom?saleRateDate(anFrom):null,to=anTo?saleRateDate(anTo):null,rows=[];
+  for(var y=first.getUTCFullYear(),m=first.getUTCMonth();y<last.getUTCFullYear()||(y===last.getUTCFullYear()&&m<=last.getUTCMonth());m++){if(m===12){m=0;y++;}
+    var end=new Date(Date.UTC(y,m+1,0));
+    if((from&&end<from)||(to&&end>to))continue;
+    var s=stockSaleRateStats(30,fmtISO(new Date(y,m+1,0)));
+    rows.push({key:y+'-'+('0'+(m+1)).slice(-2),date:fmtISO(new Date(y,m+1,0)),soldWithin:s.soldWithin,activeSelling:s.activeSelling,sold:s.sold,eligible:s.eligible,rate:s.rate});
+  }
+  return rows;
+}
+function stockTurnoverMonthlyHtml(rows){
+  return '<div class="card" style="margin-top:12px"><h3>📈 1カ月以内在庫回転率の月ごとの推移</h3>'
+    +'<p class="muted">各月の最終日時点で集計します。今月は月末前のため表示しません。月末までに売れた商品は売却済み、月末より後に売れた商品は当時の販売中として扱います。過去のステータス変更履歴は保存されていないため、販売開始日と売却日から復元した値です。上の期間指定とカテゴリ・小カテゴリ・担当者の絞り込みを反映し、販路の絞り込みは適用しません。</p>'
+    +(rows.length?'<div style="height:260px"><canvas id="turnoverChart"></canvas></div><div style="overflow-x:auto"><table><tr><th>月末</th><th>1カ月以内在庫回転率</th><th>30日以内に売却</th><th>販売中</th><th>期間を集計する売却済み</th></tr>'
+      +rows.map(function(r){return '<tr><td>'+esc(r.date)+'</td><td>'+(r.rate==null?'—':r.rate+'%')+'</td><td>'+r.soldWithin+'件</td><td>'+r.activeSelling+'件</td><td>'+r.sold+'件</td></tr>';}).join('')+'</table></div>':'<div class="loading">この条件で確定済みの月末データはありません</div>')+'</div>';
+}
+function drawStockTurnoverChart(rows){
+  if(turnoverChart){turnoverChart.destroy();turnoverChart=null;}
+  var cv=$('turnoverChart');if(!cv||typeof Chart==='undefined'||!rows.length)return;
+  turnoverChart=new Chart(cv,{type:'line',data:{labels:rows.map(function(r){return monthLabel(r.key);}),datasets:[{label:'1カ月以内在庫回転率',data:rows.map(function(r){return r.rate;}),borderColor:'#00695c',backgroundColor:'#00695c',tension:.25,fill:false,pointRadius:4,spanGaps:false}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:function(c){var r=rows[c.dataIndex];return (r.rate==null?'—':r.rate+'%')+'（'+r.soldWithin+'件 ÷ '+r.eligible+'件）';}}}},scales:{y:{min:0,max:100,ticks:{callback:function(v){return v+'%';}}}}}});
+}
 function loadAnalysis(){
   if(!CFG||!$('analysisBody'))return;
   buildAnModeBtns();buildAnPeriodBtns();buildAnAxisBtns();buildAnFilters();
   var e1=$('anFrom');if(e1)e1.value=anFrom;var e2=$('anTo');if(e2)e2.value=anTo;
   $('anKpis').style.display=anMode==='purchase'?'none':'';
   if(anMode==='purchase'){loadPurchaseAnalysis();return;}
-  var items=anItems();AN_ROWS=anGroup(items,anAxis);
+  var items=anItems();AN_ROWS=anGroup(items,anAxis),turnoverRows=stockTurnoverMonthlyRows();
   var tr=0,tp=0,tc=0,dsum=0,dn=0;
   items.forEach(function(x){var fig=salesOfMain(x);tr+=fig.revenue;tp+=fig.profit;tc+=fig.cost;var p=salePeriod(x);if(p!=null){dsum+=p;dn++;}});
   var rate=tr>0?Math.round(tp/tr*1000)/10:0;
@@ -1523,6 +1559,7 @@ function loadAnalysis(){
    +'<div class="kpi sm orange"><div class="n">'+(dn?Math.round(dsum/dn)+'日':'—')+'</div><div class="l">平均販売日数（本体のみ）</div></div>'
    +'</div>'
    +stockTurnoverHtml()
+   +stockTurnoverMonthlyHtml(turnoverRows)
    +'<div class="card" style="margin-top:12px"><h3>'+esc(anAxisLabel(anAxis))+'</h3>'
    +(AN_ROWS.length?'<div style="height:'+h+'px"><canvas id="anChart"></canvas></div>':'<div class="loading">この条件のデータはありません</div>')
    +'</div>'
@@ -1530,6 +1567,7 @@ function loadAnalysis(){
    +'<div class="card"><div style="cursor:pointer" onclick="toggleAnDetail()"><b>📄 売却明細（'+items.length+'件）</b> <span>'+(anDetailOpen?'▲':'▼')+'</span></div>'
    +'<div style="display:'+(anDetailOpen?'block':'none')+';margin-top:8px;overflow-x:auto">'+(anDetailOpen?anDetailTable(items):'')+'</div></div>';
   $('analysisBody').innerHTML=html;
+  drawStockTurnoverChart(turnoverRows);
   drawAnChart(AN_ROWS);
   renderAccessoryAnalysis(items);
 }
@@ -1626,6 +1664,7 @@ function loadPurchaseAnalysis(){
   var fl=[];if(anF.cat)fl.push(anF.cat);if(anF.sub)fl.push(anF.sub);if(anF.staff)fl.push('担当 '+anF.staff);
   var h=anAxis==='month'?260:Math.max(200,AN_ROWS.length*38+70);
   if(anChart){anChart.destroy();anChart=null;}
+  if(turnoverChart){turnoverChart.destroy();turnoverChart=null;}
   $('analysisBody').innerHTML='<div class="hero"><div class="l">'+esc(anLabel)+(fl.length?'　【'+esc(fl.join(' / '))+'】':'')+' の仕入金額</div><div class="n">'+yen(total.amount)+' 円</div><div class="s">仕入明細 '+items.length+'件 ・ 仕入数量 '+yen(total.qty)+'点</div></div>'
     +'<div class="kpis small"><div class="kpi sm blue"><div class="n">'+yen(total.amount)+'円</div><div class="l">仕入金額</div></div><div class="kpi sm"><div class="n">'+items.length+'件</div><div class="l">仕入明細</div></div><div class="kpi sm orange"><div class="n">'+yen(total.qty)+'点</div><div class="l">仕入数量</div></div></div>'
     +'<p class="muted">本体は全ステータスの商品を仕入日・現在登録されている仕入れ総額（仕入価格＋着払い＋修理・パーツ代）で集計します。付属品は初回・追加仕入れの履歴から、数量×当時の単価で集計します。販路は仕入時点では未確定のため対象外です。仕入日がない明細は全期間の総額・明細に含めますが、月ごとの推移・内訳・CSVには表示しません。期間指定中は総額からも除外します。</p>'
@@ -1814,4 +1853,3 @@ initApp();
 </script>
 </body>
 </html>
-
