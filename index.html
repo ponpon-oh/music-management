@@ -29,6 +29,10 @@
   button.btn:hover{background:var(--brand2)} button.btn.accent{background:var(--accent)} button.btn.ghost{background:#eceff1;color:var(--ink)}
   button.btn.sm{padding:6px 10px;font-size:13px} button.btn.danger{background:#fdecea;color:var(--bad)}
   .row{display:flex;gap:10px;flex-wrap:wrap} .row>div{flex:1;min-width:120px}
+  .search-with-clear{position:relative}
+  .search-with-clear input{padding-right:38px}
+  .search-clear{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:30px;height:30px;border:0;border-radius:6px;background:#eceff1;color:#455a64;font-size:20px;line-height:1;cursor:pointer}
+  .search-clear:hover{background:#cfd8dc}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
   .hero{background:linear-gradient(135deg,#00695c,#26a69a);color:#fff;border-radius:14px;padding:26px;margin-bottom:12px}
   .hero .l{font-size:15px;opacity:.9} .hero .n{font-size:52px;font-weight:800;line-height:1.05} .hero .s{font-size:12px;opacity:.85;margin-top:4px}
@@ -137,7 +141,7 @@
     <div class="card">
       <div id="stockSummary" class="summary"></div>
       <div class="row" style="align-items:flex-end">
-        <div><label>検索</label><input id="mSearch" oninput="renderManage()" placeholder="ID・商品名・メーカー"></div>
+        <div><label for="mSearch">検索</label><div class="search-with-clear"><input id="mSearch" oninput="renderManage()" placeholder="ID・商品名・メーカー"><button id="mSearchClear" class="search-clear" type="button" aria-label="検索ワードを削除" title="検索ワードを削除" onclick="clearManageSearch()" hidden>×</button></div></div>
         <div style="max-width:190px"><label>並び替え</label><select id="mSort" onchange="renderManage()"><option value="pasc" selected>販売期間が短い順</option><option value="pdesc">販売期間が長い順</option><option value="id">商品ID順</option><option value="">登録順</option></select></div>
         <div style="max-width:100px"><label>期間 最小(日)</label><input type="number" id="pMin" oninput="renderManage()"></div>
         <div style="max-width:100px"><label>最大(日)</label><input type="number" id="pMax" oninput="renderManage()"></div>
@@ -247,7 +251,7 @@
   </section>
 
   <section id="v-settings" class="view">
-    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-11-10b</b></p></div>
+    <div class="card"><p class="muted" style="margin:0">アプリ版数：<b id="appVer">2026-11-18a</b></p></div>
     <div class="card"><h2>☁ クラウド同期（複数端末で共有）</h2>
       <p class="muted">Apps ScriptのウェブアプリURLと合言葉を入れ「接続」。空なら端末内のみ保存。</p>
       <label>ウェブアプリURL（/exec）</label><input id="cloudUrlInput" placeholder="https://script.google.com/macros/s/xxxx/exec">
@@ -621,6 +625,7 @@ async function submitPurchase(){
 }
 
 /* ====== 在庫管理 ====== */
+function clearManageSearch(){var input=$('mSearch');input.value='';renderManage();input.focus();}
 function match(x,q){q=q.toLowerCase();return (x.id+' '+x.name+' '+x.maker+' '+x.category+' '+(x.subCategory||'')).toLowerCase().indexOf(q)>=0;}
 function optPattern(sel){return '<option value=""></option>'+CFG.shipPatterns.map(function(p){return '<option value="'+esc(p.name)+'"'+(p.name===sel?' selected':'')+'>'+esc(p.name)+'（'+yen(p.amount)+'円/'+esc(p.method)+'）</option>';}).join('');}
 function duplicateText(s){return String(s==null?'':s).normalize('NFKC').toLocaleLowerCase('en').replace(/\s+/g,' ').trim();}
@@ -668,6 +673,7 @@ function showDuplicateItem(id){var target=STOCK.filter(function(x){return x.id==
 function renderSummary(){var sc={},cc={};STOCK.forEach(function(x){sc[x.status]=(sc[x.status]||0)+1;if(x.status!=='売却済み')cc[x.category]=(cc[x.category]||0)+1;});
   $('stockSummary').innerHTML='<div><div class="muted">ステータス別</div>'+CFG.statuses.map(function(s){return '<span class="chip">'+esc(s)+' <b>'+(sc[s]||0)+'</b></span>';}).join('')+'</div><div><div class="muted">カテゴリ別在庫</div>'+catNames().map(function(c){return '<span class="chip">'+esc(c)+' <b>'+(cc[c]||0)+'</b></span>';}).join('')+'</div>';}
 function renderManage(){
+  $('mSearchClear').hidden=!$('mSearch').value;
   var el=$('manageList');if(!CFG||!el)return;renderSummary();updateUnlistedBadge();renderStandaloneAccessoryList();buildDataLists();
   var duplicates=buildDuplicateIndex(STOCK,state.duplicateLinks,state.duplicateAutoExclusions,state.duplicateDismissals),duplicateBtn=$('duplicateOnlyBtn');
   duplicateBtn.textContent='⚠ 重複ありのみ（'+duplicates.byId.size+'点）';
@@ -1853,3 +1859,4 @@ initApp();
 </script>
 </body>
 </html>
+
